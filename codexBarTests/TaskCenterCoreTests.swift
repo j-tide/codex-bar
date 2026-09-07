@@ -244,6 +244,67 @@ final class TaskCenterCoreTests: XCTestCase {
         XCTAssertTrue(secondClient.requests.isEmpty)
     }
 
+    func testProvisionalPermissionNotificationIsCancelledWhenToolContinues() async throws {
+        let defaultsFixture = try DefaultsFixture()
+        defer { defaultsFixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(
+            notificationClient: client,
+            defaults: defaultsFixture.defaults,
+            attentionDelayNanoseconds: 100_000_000
+        )
+        let enabled = await service.enable()
+        XCTAssertTrue(enabled)
+
+        let permission = record(
+            key: "auto-approved",
+            state: .needsAttention,
+            phase: .awaitingPermission,
+            age: 0
+        )
+        let continued = TaskActivityRecord(
+            taskKey: permission.taskKey,
+            turnKey: permission.turnKey,
+            eventKey: "event-post-tool-use",
+            state: .running,
+            phase: .processing,
+            projectName: permission.projectName,
+            model: permission.model,
+            updatedAt: fixedNow,
+            source: "PostToolUse"
+        )
+
+        service.process(snapshot: TaskCenterSnapshot(records: [permission], now: fixedNow))
+        service.process(snapshot: TaskCenterSnapshot(records: [continued], now: fixedNow))
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertTrue(client.requests.isEmpty)
+    }
+
+    func testPermissionStillWaitingAfterGracePeriodNotifies() async throws {
+        let defaultsFixture = try DefaultsFixture()
+        defer { defaultsFixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(
+            notificationClient: client,
+            defaults: defaultsFixture.defaults,
+            attentionDelayNanoseconds: 50_000_000
+        )
+        let enabled = await service.enable()
+        XCTAssertTrue(enabled)
+        let permission = record(
+            key: "manual-approval",
+            state: .needsAttention,
+            phase: .awaitingPermission,
+            age: 0
+        )
+
+        service.process(snapshot: TaskCenterSnapshot(records: [permission], now: fixedNow))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(client.requests.count, 1)
+    }
+
     func testNotificationDedupeIsPersistedBeforeSchedulingCompletes() async throws {
         let defaultsFixture = try DefaultsFixture()
         defer { defaultsFixture.remove() }

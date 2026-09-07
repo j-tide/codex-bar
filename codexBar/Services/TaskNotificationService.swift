@@ -80,20 +80,32 @@ final class TaskNotificationService: ObservableObject {
     private static let enabledDefaultsKey = "codexbar.taskAttentionNotificationsEnabled"
     private static let notifiedEventKeysDefaultsKey = "codexbar.taskAttentionNotifiedEventKeys"
     private static let maximumRememberedEvents = 512
+    private static let productionAttentionDelayNanoseconds: UInt64 = 15_000_000_000
 
     private let notificationClient: TaskNotificationClient
     private let defaults: UserDefaults
+    private let attentionDelayNanoseconds: UInt64
     private var notifiedEventKeys: [String]
     private var notifiedEventKeySet: Set<String>
     private var latestSnapshot: TaskCenterSnapshot?
+    private var pendingNotificationTasks: [String: Task<Void, Never>] = [:]
 
     convenience init() {
-        self.init(notificationClient: SystemTaskNotificationClient(), defaults: .standard)
+        self.init(
+            notificationClient: SystemTaskNotificationClient(),
+            defaults: .standard,
+            attentionDelayNanoseconds: Self.productionAttentionDelayNanoseconds
+        )
     }
 
-    init(notificationClient: TaskNotificationClient, defaults: UserDefaults) {
+    init(
+        notificationClient: TaskNotificationClient,
+        defaults: UserDefaults,
+        attentionDelayNanoseconds: UInt64 = 0
+    ) {
         self.notificationClient = notificationClient
         self.defaults = defaults
+        self.attentionDelayNanoseconds = attentionDelayNanoseconds
         let savedKeys = defaults.stringArray(forKey: Self.notifiedEventKeysDefaultsKey) ?? []
         notifiedEventKeys = savedKeys
         notifiedEventKeySet = Set(savedKeys)
@@ -132,23 +144,63 @@ final class TaskNotificationService: ObservableObject {
     func disable() {
         defaults.set(false, forKey: Self.enabledDefaultsKey)
         isEnabled = false
+        cancelAllPendingNotifications()
     }
 
     func process(snapshot: TaskCenterSnapshot) {
         latestSnapshot = snapshot
-        guard isEnabled else { return }
+        let activeDedupeKeys = Set(snapshot.needsAttentionRecords.map { Self.digest($0.eventKey) })
+        for (dedupeKey, task) in pendingNotificationTasks where !activeDedupeKeys.contains(dedupeKey) {
+            task.cancel()
+            pendingNotificationTasks.removeValue(forKey: dedupeKey)
+        }
+
+        guard isEnabled else {
+            cancelAllPendingNotifications()
+            return
+        }
 
         for record in snapshot.needsAttentionRecords {
             let dedupeKey = Self.digest(record.eventKey)
-            guard !notifiedEventKeySet.contains(dedupeKey) else { continue }
+            guard !notifiedEventKeySet.contains(dedupeKey),
+                  pendingNotificationTasks[dedupeKey] == nil else { continue }
 
-            // Persist before handing the request to the notification center.
-            // This provides at-most-once scheduling even if the app exits
-            // between system acceptance and the completion callback.
-            remember(dedupeKey)
-            let request = notificationRequest(for: record, dedupeKey: dedupeKey)
-            notificationClient.add(request) { _ in }
+            if attentionDelayNanoseconds == 0 {
+                sendNotification(for: record, dedupeKey: dedupeKey)
+                continue
+            }
+
+            let delay = attentionDelayNanoseconds
+            pendingNotificationTasks[dedupeKey] = Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: delay)
+                } catch {
+                    return
+                }
+                guard let self else { return }
+                self.pendingNotificationTasks.removeValue(forKey: dedupeKey)
+                guard self.isEnabled,
+                      !self.notifiedEventKeySet.contains(dedupeKey),
+                      self.latestSnapshot?.needsAttentionRecords.contains(where: {
+                          Self.digest($0.eventKey) == dedupeKey
+                      }) == true else { return }
+                self.sendNotification(for: record, dedupeKey: dedupeKey)
+            }
         }
+    }
+
+    private func sendNotification(for record: TaskActivityRecord, dedupeKey: String) {
+        // Persist before handing the request to the notification center.
+        // This provides at-most-once scheduling even if the app exits
+        // between system acceptance and the completion callback.
+        remember(dedupeKey)
+        let request = notificationRequest(for: record, dedupeKey: dedupeKey)
+        notificationClient.add(request) { _ in }
+    }
+
+    private func cancelAllPendingNotifications() {
+        pendingNotificationTasks.values.forEach { $0.cancel() }
+        pendingNotificationTasks.removeAll()
     }
 
     private func currentAuthorizationStatus() async -> UNAuthorizationStatus {
@@ -163,6 +215,9 @@ final class TaskNotificationService: ObservableObject {
         let wasEnabled = isEnabled
         authorizationStatus = status
         isEnabled = defaults.bool(forKey: Self.enabledDefaultsKey) && Self.isAuthorized(status)
+        if !isEnabled {
+            cancelAllPendingNotifications()
+        }
         if !wasEnabled, isEnabled, let latestSnapshot {
             process(snapshot: latestSnapshot)
         }
