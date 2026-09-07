@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "type": "visual_spatial_reasoning_summary",
+  "mode": "latest_valid_per_task",
+  "source_updated_at": "2026-09-07T04:47:39.000Z",
+  "points": [
+    {
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "valid_tasks": 16,
+      "iq": 136.46536874999998
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "valid_tasks": 15,
+      "iq": 139.95935
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "valid_tasks": 11,
+      "iq": 139.0909090909091
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "valid_tasks": 2,
+      "iq": 150
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "max",
+      "valid_tasks": 5,
+      "iq": 140.22101999999998
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "ultra",
+      "valid_tasks": 2,
+      "iq": 133.74997499999998
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "valid_tasks": 86,
+      "iq": 85.97022558139535
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "valid_tasks": 86,
+      "iq": 93.52678779069765
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "valid_tasks": 86,
+      "iq": 98.38782209302325
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "valid_tasks": 86,
+      "iq": 99.87630174418598
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "max",
+      "valid_tasks": 86,
+      "iq": 102.11038779069767
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "ultra",
+      "valid_tasks": 86,
+      "iq": 109.24851104651158
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "low",
+      "valid_tasks": 86,
+      "iq": 72.28349127906979
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "medium",
+      "valid_tasks": 86,
+      "iq": 77.02233837209302
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "valid_tasks": 86,
+      "iq": 90.84607325581396
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "xhigh",
+      "valid_tasks": 86,
+      "iq": 86.13197093023255
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "max",
+      "valid_tasks": 86,
+      "iq": 93.62229941860464
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "ultra",
+      "valid_tasks": 86,
+      "iq": 99.92975232558139
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "valid_tasks": 86,
+      "iq": 63.66565639534882
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "medium",
+      "valid_tasks": 86,
+      "iq": 73.15722732558136
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "valid_tasks": 86,
+      "iq": 83.69256104651163
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "xhigh",
+      "valid_tasks": 86,
+      "iq": 89.69859593023256
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "max",
+      "valid_tasks": 86,
+      "iq": 90.81365058139534
+    },
+    {
+      "model": "gpt-5.5",
+      "effort": "high",
+      "valid_tasks": 86,
+      "iq": 94.01903895348836
+    },
+    {
+      "model": "gpt-5.5",
+      "effort": "xhigh",
+      "valid_tasks": 86,
+      "iq": 93.9011406976744
+    }
+  ]
+}

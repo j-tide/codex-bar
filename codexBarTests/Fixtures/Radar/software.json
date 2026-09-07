@@ -1,0 +1,391 @@
+{
+  "schema": 3,
+  "mode": "equal_latest_3",
+  "source_updated_at": "2026-09-07T04:44:58+00:00",
+  "points": [
+    {
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "total": 109,
+      "iq": 101.83
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "total": 110,
+      "iq": 105.0
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "total": 107,
+      "iq": 109.35
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "total": 114,
+      "iq": 103.95
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "max",
+      "total": 91,
+      "iq": 112.09
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "ultra",
+      "total": 57,
+      "iq": 110.53
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "total": 336,
+      "iq": 81.25
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "total": 336,
+      "iq": 95.54
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "total": 336,
+      "iq": 96.88
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "total": 336,
+      "iq": 100.0
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "max",
+      "total": 336,
+      "iq": 106.7
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "ultra",
+      "total": 336,
+      "iq": 100.89
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "low",
+      "total": 336,
+      "iq": 50.89
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "medium",
+      "total": 336,
+      "iq": 59.38
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "total": 336,
+      "iq": 77.68
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "xhigh",
+      "total": 336,
+      "iq": 87.95
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "max",
+      "total": 336,
+      "iq": 101.34
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "ultra",
+      "total": 336,
+      "iq": 100.0
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "total": 336,
+      "iq": 8.04
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "medium",
+      "total": 336,
+      "iq": 32.14
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "total": 336,
+      "iq": 76.34
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "xhigh",
+      "total": 336,
+      "iq": 87.05
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "max",
+      "total": 336,
+      "iq": 100.89
+    },
+    {
+      "model": "gpt-5.5",
+      "effort": "high",
+      "total": 336,
+      "iq": 89.73
+    },
+    {
+      "model": "gpt-5.5",
+      "effort": "xhigh",
+      "total": 336,
+      "iq": 96.43
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "effort": "max",
+      "total": 336,
+      "iq": 86.16
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "effort": "high",
+      "total": 336,
+      "iq": 65.62
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "effort": "max",
+      "total": 156,
+      "iq": 85.58
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "effort": "high",
+      "total": 119,
+      "iq": 88.24
+    },
+    {
+      "model": "dsh-deepseek-v4-flash",
+      "effort": "max",
+      "total": 217,
+      "iq": 80.18
+    },
+    {
+      "model": "dsh-deepseek-v4-flash",
+      "effort": "high",
+      "total": 246,
+      "iq": 75.0
+    },
+    {
+      "model": "dsh-deepseek-v4-pro",
+      "effort": "max",
+      "total": 281,
+      "iq": 96.09
+    },
+    {
+      "model": "dsh-deepseek-v4-pro",
+      "effort": "high",
+      "total": 194,
+      "iq": 78.09
+    },
+    {
+      "model": "grok-4.6",
+      "effort": "high",
+      "total": 314,
+      "iq": 98.89
+    },
+    {
+      "model": "grok-4.6",
+      "effort": "medium",
+      "total": 271,
+      "iq": 93.54
+    },
+    {
+      "model": "grok-4.6",
+      "effort": "low",
+      "total": 264,
+      "iq": 81.25
+    },
+    {
+      "model": "grok-4.6",
+      "effort": "xhigh",
+      "total": 321,
+      "iq": 100.0
+    },
+    {
+      "model": "k3",
+      "effort": "low",
+      "total": 179,
+      "iq": 90.5
+    },
+    {
+      "model": "k3",
+      "effort": "high",
+      "total": 160,
+      "iq": 94.69
+    },
+    {
+      "model": "k3",
+      "effort": "max",
+      "total": 183,
+      "iq": 104.92
+    },
+    {
+      "model": "glm-5.3",
+      "effort": "low",
+      "total": 225,
+      "iq": 78.67
+    },
+    {
+      "model": "glm-5.3",
+      "effort": "high",
+      "total": 249,
+      "iq": 96.99
+    },
+    {
+      "model": "glm-5.3",
+      "effort": "max",
+      "total": 218,
+      "iq": 97.02
+    },
+    {
+      "model": "glm-5.3-flash",
+      "effort": "low",
+      "total": 137,
+      "iq": 67.88
+    },
+    {
+      "model": "glm-5.3-flash",
+      "effort": "high",
+      "total": 137,
+      "iq": 94.16
+    },
+    {
+      "model": "glm-5.3-flash",
+      "effort": "max",
+      "total": 182,
+      "iq": 90.66
+    },
+    {
+      "model": "dsh-deepseek-v4-flash-vision-exp",
+      "effort": "max",
+      "total": 80,
+      "iq": 99.38
+    },
+    {
+      "model": "dsh-deepseek-v4-flash-vision-exp",
+      "effort": "high",
+      "total": 69,
+      "iq": 63.04
+    },
+    {
+      "model": "gemini-3.7-flash",
+      "effort": "low",
+      "total": 196,
+      "iq": 69.64
+    },
+    {
+      "model": "gemini-3.7-flash",
+      "effort": "medium",
+      "total": 206,
+      "iq": 93.93
+    },
+    {
+      "model": "gemini-3.7-flash",
+      "effort": "high",
+      "total": 192,
+      "iq": 92.19
+    },
+    {
+      "model": "hy4-preview",
+      "effort": "max",
+      "total": 20,
+      "iq": 75.0
+    },
+    {
+      "model": "hy4-preview",
+      "effort": "high",
+      "total": 11,
+      "iq": 136.36
+    },
+    {
+      "model": "hy4-preview",
+      "effort": "low",
+      "total": 21,
+      "iq": 107.14
+    },
+    {
+      "model": "claude-sonnet-5",
+      "effort": "low",
+      "total": 15,
+      "iq": 60.0
+    },
+    {
+      "model": "claude-sonnet-5",
+      "effort": "medium",
+      "total": 6,
+      "iq": 75.0
+    },
+    {
+      "model": "claude-sonnet-5",
+      "effort": "high",
+      "total": 2,
+      "iq": 150.0
+    },
+    {
+      "model": "claude-sonnet-5",
+      "effort": "xhigh",
+      "total": 5,
+      "iq": 30.0
+    },
+    {
+      "model": "claude-sonnet-5",
+      "effort": "max",
+      "total": 1,
+      "iq": 0.0
+    },
+    {
+      "model": "claude-opus-5",
+      "effort": "low",
+      "total": 3,
+      "iq": 100.0
+    },
+    {
+      "model": "claude-opus-5",
+      "effort": "medium",
+      "total": 2,
+      "iq": 75.0
+    },
+    {
+      "model": "claude-opus-5",
+      "effort": "high",
+      "total": 2,
+      "iq": 0.0
+    },
+    {
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "total": 2,
+      "iq": 75.0
+    },
+    {
+      "model": "claude-opus-5",
+      "effort": "max",
+      "total": 8,
+      "iq": 56.25
+    }
+  ]
+}

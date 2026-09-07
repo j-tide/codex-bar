@@ -1,6 +1,7 @@
 import Foundation
 
 enum CodexRadarModelFamily: String, CaseIterable {
+    case astra
     case terra
     case luna
     case sol
@@ -8,6 +9,8 @@ enum CodexRadarModelFamily: String, CaseIterable {
 
     var displayName: String? {
         switch self {
+        case .astra:
+            return "Astra"
         case .terra:
             return "Terra"
         case .luna:
@@ -21,6 +24,8 @@ enum CodexRadarModelFamily: String, CaseIterable {
 
     var symbolName: String {
         switch self {
+        case .astra:
+            return "sparkle"
         case .terra:
             return "globe.americas"
         case .luna:
@@ -34,6 +39,8 @@ enum CodexRadarModelFamily: String, CaseIterable {
 
     nonisolated var sortOrder: Int {
         switch self {
+        case .astra:
+            return -1
         case .sol:
             return 0
         case .terra:
@@ -48,7 +55,7 @@ enum CodexRadarModelFamily: String, CaseIterable {
     static func resolve(model: String?, label: String?, id: String?) -> Self {
         let values = [model, label, id].compactMap { $0 }
 
-        for family in [Self.terra, .luna, .sol] {
+        for family in [Self.astra, .terra, .luna, .sol] {
             if values.contains(where: { tokens(in: $0).contains(family.rawValue) }) {
                 return family
             }
@@ -138,7 +145,7 @@ struct CodexRadarMatrix {
 
 enum CodexRadarPresentation {
     static let standardEfforts = ["low", "medium", "high", "xhigh", "max"]
-    private static let rankingEfforts = ["max", "xhigh", "high", "medium", "low"]
+    private static let rankingEfforts = ["ultra", "max", "xhigh", "high", "medium", "low", "off"]
 
     private static let effortLabels: [String: String] = [
         "max": "max",
@@ -240,7 +247,7 @@ enum CodexRadarPresentation {
         effort: String?,
         label: String?
     ) -> CodexRadarMatrixCell? {
-        guard let score = entry.score else { return nil }
+        guard let score = entry.score, score.isFinite, score >= 0 else { return nil }
 
         let normalizedEffort = normalizeEffort(effort ?? effortFromLabel(label)) ?? "default"
         let family = CodexRadarModelFamily.resolve(model: model, label: label, id: sourceID)

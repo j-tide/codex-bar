@@ -5,6 +5,7 @@ import Foundation
 final class CodexRadarService: ObservableObject {
     static let shared = CodexRadarService()
 
+    @Published private(set) var intelligence: CodexRadarIntelligenceReport?
     @Published private(set) var snapshot: CodexRadarSnapshot?
     @Published private(set) var lastFetchAt: Date?
     @Published private(set) var lastError: String?
@@ -15,7 +16,11 @@ final class CodexRadarService: ObservableObject {
     private let refreshInterval: TimeInterval = 15 * 60
     private var timer: Timer?
 
-    private init() {}
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     var homepageURL: URL { websiteURL }
 
@@ -39,56 +44,55 @@ final class CodexRadarService: ObservableObject {
     }
 
     func refresh() async {
-        if isRefreshing { return }
+        guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
 
+        // Reset windows and intelligence scores have independent availability.
+        async let reset: () = refreshResetWindow()
+        async let quality: () = refreshIntelligence()
+        _ = await (reset, quality)
+    }
+
+    private func refreshResetWindow() async {
         do {
-            var request = URLRequest(url: statusURL)
-            request.timeoutInterval = 10
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            let data = try await fetch(statusURL)
+            snapshot = try Self.decoder.decode(CodexRadarSnapshot.self, from: data)
+        } catch {
+            // A failed reset check must not prevent the quality leaderboard loading.
+        }
+    }
 
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode) else {
-                throw CodexRadarError.invalidResponse
-            }
-
-            var decoded = try Self.decoder.decode(CodexRadarSnapshot.self, from: data)
-            var fallbackError: Error?
-            if decoded.modelIQ?.latest == nil {
-                do {
-                    decoded.modelIQ = try await fetchModelIQFromHomepage(referenceDate: decoded.monitoredAt ?? Date())
-                } catch {
-                    fallbackError = error
-                }
-            }
-
-            snapshot = decoded
+    private func refreshIntelligence() async {
+        do {
+            async let softwareData = fetch(URL(string: "https://codexradar.com/api/intelligence-efficiency-metrics")!, requireCurrent: true)
+            async let visualData = fetch(URL(string: "https://codexradar.com/api/visual-spatial-reasoning")!, requireCurrent: true)
+            let report = try await CodexRadarIntelligenceReport.decode(software: softwareData, visual: visualData)
+            intelligence = report
             lastFetchAt = Date()
-            lastError = decoded.modelIQ?.latest == nil ? fallbackError?.localizedDescription : nil
+            lastError = nil
         } catch {
             lastError = error.localizedDescription
         }
     }
 
-    private func fetchModelIQFromHomepage(referenceDate: Date) async throws -> CodexRadarModelIQ {
-        var request = URLRequest(url: websiteURL)
-        request.timeoutInterval = 10
+    private func fetch(_ url: URL, requireCurrent: Bool = false) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
-        request.setValue("zh-CN,zh;q=0.9,en;q=0.6", forHTTPHeaderField: "Accept-Language")
-        request.setValue("CodexAppBar", forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              let html = String(data: data, encoding: .utf8) else {
+              (200..<300).contains(http.statusCode) else {
             throw CodexRadarError.invalidResponse
         }
-
-        return try CodexRadarHTMLParser.parseModelIQ(from: html, referenceDate: referenceDate)
+        if requireCurrent {
+            let cache = http.value(forHTTPHeaderField: "X-Codex-Cache") ?? ""
+            guard !cache.isEmpty, !cache.hasPrefix("STALE"), cache != "ERROR" else {
+                throw CodexRadarError.staleResponse
+            }
+        }
+        return data
     }
 
     private static let decoder: JSONDecoder = {
@@ -109,212 +113,20 @@ final class CodexRadarService: ObservableObject {
     }()
 }
 
-private enum CodexRadarError: LocalizedError {
+enum CodexRadarError: LocalizedError {
     case invalidResponse
     case modelQualityUnavailable
+    case staleResponse
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return L.zh ? "CodexRadar 响应无效" : "Invalid CodexRadar response"
+        case .staleResponse:
+            return L.zh ? "数据源暂未更新，请稍后重试" : "Source data is stale. Try again later."
         case .modelQualityUnavailable:
-            return L.zh ? "CodexRadar 模型质量页面无可解析数据" : "CodexRadar model quality is unavailable"
+            return L.zh ? "CodexRadar 暂无可用评分数据" : "CodexRadar model quality is unavailable"
         }
-    }
-}
-
-enum CodexRadarHTMLParser {
-    static func parseModelIQ(from html: String, referenceDate: Date = Date()) throws -> CodexRadarModelIQ {
-        let chips = parseScoreChips(from: html)
-        guard let primary = chips.first(where: \.isPrimary) ?? chips.first else {
-            throw CodexRadarError.modelQualityUnavailable
-        }
-
-        let metrics = parseMetricRows(from: html)
-        let date = parseDisplayDate(from: html, referenceDate: referenceDate)
-        var entries: [String: CodexRadarModelIQEntry] = [:]
-        for chip in chips {
-            entries[chip.key] = entry(for: chip, metrics: metrics, date: date)
-        }
-        guard let latest = entries[primary.key] else {
-            throw CodexRadarError.modelQualityUnavailable
-        }
-
-        var comparisons: [String: CodexRadarModelIQComparison] = [:]
-        for chip in chips where chip.key != primary.key {
-            guard let latest = entries[chip.key] else { continue }
-            let parts = modelParts(from: chip.label)
-            comparisons[chip.key] = CodexRadarModelIQComparison(
-                label: chip.label,
-                model: parts.model,
-                reasoningEffort: parts.effort,
-                latest: latest
-            )
-        }
-
-        return CodexRadarModelIQ(latest: latest, comparisons: comparisons)
-    }
-
-    private static func parseScoreChips(from html: String) -> [ScoreChip] {
-        matches(
-            in: html,
-            pattern: #"<div\s+class="([^"]*\bmodel-iq-score-chip\b[^"]*)"[^>]*\bdata-model-key="([^"]+)"[^>]*>\s*<span[^>]*>(.*?)</span>\s*<strong[^>]*>(.*?)</strong>"#
-        ).compactMap { match in
-            guard match.count >= 5 else { return nil }
-            let classes = match[1]
-            let key = decodedHTMLText(match[2])
-            let label = decodedHTMLText(match[3])
-            let score = Double(decodedHTMLText(match[4]).replacingOccurrences(of: ",", with: ""))
-            guard !key.isEmpty, !label.isEmpty, let score else { return nil }
-            return ScoreChip(
-                key: key,
-                label: label,
-                score: score,
-                isPrimary: classes.contains("model-iq-score-chip-primary")
-            )
-        }
-    }
-
-    private static func parseMetricRows(from html: String) -> [String: [String: String]] {
-        var result: [String: [String: String]] = [:]
-        let rowMatches = matches(
-            in: html,
-            pattern: #"<div\s+class="[^"]*\bmodel-iq-compare-row\b[^"]*"[^>]*>(.*?)</div>"#
-        )
-
-        for rowMatch in rowMatches {
-            guard let row = rowMatch.last,
-                  let rawMetric = firstMatch(in: row, pattern: #"<span[^>]*>(.*?)</span>"#) else {
-                continue
-            }
-
-            let metric = decodedHTMLText(rawMetric)
-            var values: [String: String] = [:]
-            for valueMatch in matches(
-                in: row,
-                pattern: #"<strong\s+class="[^"]*\bmodel-iq-column-([A-Za-z0-9_-]+)\b[^"]*"[^>]*>(.*?)</strong>"#
-            ) {
-                guard valueMatch.count >= 3 else { continue }
-                values[decodedHTMLText(valueMatch[1])] = decodedHTMLText(valueMatch[2])
-            }
-
-            if !metric.isEmpty, !values.isEmpty {
-                result[metric] = values
-            }
-        }
-
-        return result
-    }
-
-    private static func entry(
-        for chip: ScoreChip,
-        metrics: [String: [String: String]],
-        date: String?
-    ) -> CodexRadarModelIQEntry {
-        let passParts = passCount(from: metrics["通过数"]?[chip.key])
-        let parts = modelParts(from: chip.label)
-
-        return CodexRadarModelIQEntry(
-            date: date,
-            score: chip.score,
-            status: status(for: chip.score),
-            passed: passParts.passed,
-            tasks: passParts.tasks,
-            model: parts.model,
-            reasoningEffort: parts.effort
-        )
-    }
-
-    private static func passCount(from value: String?) -> (passed: Int?, tasks: Int?) {
-        guard let value else { return (nil, nil) }
-        let parts = value.split(separator: "/", maxSplits: 1).map { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        guard parts.count == 2 else { return (nil, nil) }
-        return (parts[0], parts[1])
-    }
-
-    private static func status(for score: Double) -> String {
-        if score >= 90 { return "green" }
-        if score >= 80 { return "yellow" }
-        return "red"
-    }
-
-    private static func modelParts(from label: String) -> (model: String?, effort: String?) {
-        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lower = trimmed.lowercased()
-        for effort in ["xhigh", "high", "medium", "low", "max"] {
-            if lower.hasSuffix("-\(effort)") {
-                return (String(trimmed.dropLast(effort.count + 1)), effort)
-            }
-            if lower.hasSuffix(" \(effort)") {
-                return (String(trimmed.dropLast(effort.count + 1)), effort)
-            }
-        }
-        return (trimmed, nil)
-    }
-
-    private static func parseDisplayDate(from html: String, referenceDate: Date) -> String? {
-        guard let raw = firstMatch(in: html, pattern: #"降智雷达\s*<span[^>]*>([^<]+)</span>"#),
-              let monthText = firstMatch(in: raw, pattern: #"(\d{1,2})月\d{1,2}日"#),
-              let dayText = firstMatch(in: raw, pattern: #"\d{1,2}月(\d{1,2})日"#),
-              let month = Int(monthText),
-              let day = Int(dayText) else {
-            return nil
-        }
-
-        let calendar = Calendar(identifier: .gregorian)
-        let referenceYear = calendar.component(.year, from: referenceDate)
-        let candidates = [referenceYear, referenceYear - 1, referenceYear + 1].compactMap { year -> Date? in
-            DateComponents(calendar: calendar, year: year, month: month, day: day).date
-        }
-        guard let date = candidates.min(by: {
-            abs($0.timeIntervalSince(referenceDate)) < abs($1.timeIntervalSince(referenceDate))
-        }) else {
-            return nil
-        }
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
-    }
-
-    private static func firstMatch(in string: String, pattern: String) -> String? {
-        matches(in: string, pattern: pattern).first?.dropFirst().first
-    }
-
-    private static func matches(in string: String, pattern: String) -> [[String]] {
-        guard let regex = try? NSRegularExpression(
-            pattern: pattern,
-            options: [.caseInsensitive, .dotMatchesLineSeparators]
-        ) else {
-            return []
-        }
-        let range = NSRange(string.startIndex..<string.endIndex, in: string)
-        return regex.matches(in: string, range: range).map { match in
-            (0..<match.numberOfRanges).map { index in
-                guard let range = Range(match.range(at: index), in: string) else { return "" }
-                return String(string[range])
-            }
-        }
-    }
-
-    private static func decodedHTMLText(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private struct ScoreChip {
-        let key: String
-        let label: String
-        let score: Double
-        let isPrimary: Bool
     }
 }
 
@@ -468,5 +280,125 @@ struct CodexRadarModelIQEntry: Decodable {
         self.tasks = tasks
         self.model = model
         self.reasoningEffort = reasoningEffort
+    }
+}
+
+// Mirrors codexradar.com's comprehensive score: weight both dimensions by valid tasks.
+enum CodexRadarDimension: String, CaseIterable, Identifiable {
+    case comprehensive, software, visual
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .comprehensive: return L.zh ? "综合智能" : "Overall"
+        case .software: return L.zh ? "软件工程" : "Coding"
+        case .visual: return L.zh ? "空间推理" : "Spatial"
+        }
+    }
+}
+
+struct CodexRadarMetricsPayload: Decodable {
+    let schema: Int
+    let mode: String
+    let type: String?
+    let sourceUpdatedAt: String?
+    let points: [Point]
+
+    enum CodingKeys: String, CodingKey {
+        case schema, mode, type, points
+        case sourceUpdatedAt = "source_updated_at"
+    }
+
+    struct Point: Decodable {
+        let model: String
+        let effort: String
+        let iq: Double?
+        let total: Double?
+        let weightedTotal: Double?
+        let validTasks: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case model, effort, iq, total
+            case weightedTotal = "weighted_total"
+            case validTasks = "valid_tasks"
+        }
+
+        var key: String { "\(model)|\(effort)" }
+    }
+}
+
+struct CodexRadarIntelligenceReport {
+    let software: CodexRadarMetricsPayload
+    let visual: CodexRadarMetricsPayload
+
+    static func decode(software: Data, visual: Data) throws -> Self {
+        let decoder = JSONDecoder()
+        let report = try Self(
+            software: decoder.decode(CodexRadarMetricsPayload.self, from: software),
+            visual: decoder.decode(CodexRadarMetricsPayload.self, from: visual)
+        )
+        guard (report.software.schema == 3 && report.software.mode == "equal_latest_3"
+                || report.software.schema == 2 && report.software.mode == "weighted_latest_3"),
+              report.visual.type == "visual_spatial_reasoning_summary",
+              !report.modelIQ(for: .comprehensive).comparisons.isEmpty else {
+            throw CodexRadarError.modelQualityUnavailable
+        }
+        return report
+    }
+
+    func updatedAt(for dimension: CodexRadarDimension) -> Date? {
+        let softwareDate = Self.date(software.sourceUpdatedAt)
+        let visualDate = Self.date(visual.sourceUpdatedAt)
+        switch dimension {
+        case .software: return softwareDate
+        case .visual: return visualDate
+        case .comprehensive:
+            guard let softwareDate, let visualDate else { return nil }
+            return min(softwareDate, visualDate)
+        }
+    }
+
+    func modelIQ(for dimension: CodexRadarDimension) -> CodexRadarModelIQ {
+        let softwarePoints = validPoints(software, isSoftware: true)
+        let visualPoints = validPoints(visual, isSoftware: false)
+        var comparisons: [String: CodexRadarModelIQComparison] = [:]
+        let points = dimension == .visual ? visualPoints : softwarePoints
+        for (key, point) in points {
+            guard let iq = point.iq else { continue }
+            var score = iq
+            if dimension == .comprehensive {
+                guard let other = visualPoints[key], let visualIQ = other.iq else { continue }
+                let softwareWeight = max(1, weight(point, isSoftware: true))
+                let visualWeight = max(1, weight(other, isSoftware: false))
+                score = (iq * softwareWeight + visualIQ * visualWeight) / (softwareWeight + visualWeight)
+            }
+            let entry = CodexRadarModelIQEntry(score: score, model: point.model, reasoningEffort: point.effort)
+            comparisons[key] = CodexRadarModelIQComparison(
+                label: nil, model: point.model, reasoningEffort: point.effort, latest: entry
+            )
+        }
+        return CodexRadarModelIQ(latest: nil, comparisons: comparisons)
+    }
+
+    private func validPoints(_ payload: CodexRadarMetricsPayload, isSoftware: Bool) -> [String: CodexRadarMetricsPayload.Point] {
+        var result: [String: CodexRadarMetricsPayload.Point] = [:]
+        for point in payload.points {
+            // The app's quality section covers Codex models, as in the reference board.
+            guard point.model.hasPrefix("gpt-"), !point.effort.isEmpty,
+                  let iq = point.iq, iq.isFinite, iq >= 0,
+                  weight(point, isSoftware: isSoftware) > 0 else { continue }
+            result[point.key] = point
+        }
+        return result
+    }
+
+    private func weight(_ point: CodexRadarMetricsPayload.Point, isSoftware: Bool) -> Double {
+        if isSoftware { return (software.schema == 2 ? point.weightedTotal : point.total) ?? 0 }
+        return point.validTasks ?? 0
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        return DateFormatters.iso8601WithFractionalSeconds.date(from: value) ?? DateFormatters.iso8601.date(from: value)
     }
 }

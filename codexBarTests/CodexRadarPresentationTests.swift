@@ -131,7 +131,7 @@ final class CodexRadarPresentationTests: XCTestCase {
     }
 
     @MainActor
-    func testMatrixViewRendersAtPopoverWidthWithoutFocusState() throws {
+    func testLeaderboardRendersAtPopoverWidth() throws {
         let modelIQ = CodexRadarModelIQ(
             latest: entry(score: 105, model: "gpt-5.6-sol", effort: "max", passed: 7, tasks: 10),
             comparisons: [
@@ -147,10 +147,7 @@ final class CodexRadarPresentationTests: XCTestCase {
         )
         let matrix = CodexRadarPresentation.matrix(from: modelIQ)
         let content = VStack(alignment: .leading, spacing: 8) {
-            CodexRadarMatrixView(
-                matrix: matrix,
-                hoveredCellID: .constant(nil)
-            )
+            CodexRadarLeaderboardView(matrix: matrix)
 
             if let best = matrix.cell(id: matrix.bestCellID) {
                 Text("第 1 名：\(best.displayName) · IQ \(CodexRadarPresentation.scoreText(best.score)) · 通过 8/10 题")
@@ -168,7 +165,7 @@ final class CodexRadarPresentationTests: XCTestCase {
         let tiffData = try XCTUnwrap(image.tiffRepresentation)
         let bitmap = try XCTUnwrap(NSBitmapImageRep(data: tiffData))
         let pngData = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-        try pngData.write(to: URL(fileURLWithPath: "/tmp/codexbar-matrix-rendered.png"))
+        try pngData.write(to: URL(fileURLWithPath: "/tmp/codexbar-leaderboard-rendered.png"))
 
         XCTAssertEqual(image.size.width, 300, accuracy: 0.5)
     }
