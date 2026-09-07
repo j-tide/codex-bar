@@ -81,6 +81,7 @@ class HookV2Tests(unittest.TestCase):
                 "needs_attention",
                 "awaiting_permission",
             ),
+            ("PostToolUse", None, "running", "processing"),
             ("Stop", None, "ready", "waiting_input"),
         ]
 
@@ -107,7 +108,9 @@ class HookV2Tests(unittest.TestCase):
                     payload["source"] = variant
 
                 result = self.invoke(event, payload, variant)
-                self.assert_success_without_output(result)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(result.stdout, "{}\n" if event == "Stop" else "")
                 output = self.read_session(session_id)
                 self.assertEqual(set(output), allowed_keys)
                 self.assertEqual(output["schemaVersion"], 2)
@@ -126,9 +129,10 @@ class HookV2Tests(unittest.TestCase):
         self.assert_success_without_output(
             self.invoke("UserPromptSubmit", self.base_payload("session-a", "turn-a"))
         )
-        self.assert_success_without_output(
-            self.invoke("Stop", self.base_payload("session-b", "turn-b"))
-        )
+        stopped = self.invoke("Stop", self.base_payload("session-b", "turn-b"))
+        self.assertEqual(stopped.returncode, 0)
+        self.assertEqual(stopped.stdout, "{}\n")
+        self.assertEqual(stopped.stderr, "")
 
         files = list(
             (self.home / ".codex" / "codexbar" / "sessions").glob("*.json")
@@ -151,6 +155,24 @@ class HookV2Tests(unittest.TestCase):
         self.assertEqual(second["state"], "ready")
         self.assertEqual(second["phase"], "waiting_input")
         self.assertNotEqual(first["eventKey"], second["eventKey"])
+
+    def test_post_tool_use_retracts_provisional_permission_attention(self):
+        payload = self.base_payload()
+        payload.update({
+            "tool_name": "Bash",
+            "tool_input": {"command": "private-command"},
+            "tool_response": {"output": "private-output"},
+        })
+        self.invoke("PermissionRequest", payload)
+        self.assertEqual(self.read_session("session-alpha")["state"], "needs_attention")
+
+        result = self.invoke("PostToolUse", payload)
+
+        self.assert_success_without_output(result)
+        output = self.read_session("session-alpha")
+        self.assertEqual(output["state"], "running")
+        self.assertEqual(output["phase"], "processing")
+        self.assertEqual(output["source"], "PostToolUse")
 
     def test_permission_event_key_deduplicates_retries_but_not_distinct_requests(self):
         payload = self.base_payload()
@@ -304,8 +326,11 @@ class HookV2Tests(unittest.TestCase):
                     payload["tool_name"] = "Bash"
                     payload["tool_input"] = {"command": "command-%d" % index}
                     futures.append(executor.submit(self.invoke, event, payload))
-                for future in futures:
-                    self.assert_success_without_output(future.result())
+                for event, future in zip(events, futures):
+                    result = future.result()
+                    self.assertEqual(result.returncode, 0)
+                    self.assertEqual(result.stderr, "")
+                    self.assertEqual(result.stdout, "{}\n" if event == "Stop" else "")
         finally:
             stop_reading.set()
             reader_thread.join(timeout=2)

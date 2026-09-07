@@ -42,9 +42,9 @@ final class CodexHookInstallerService: ObservableObject {
     private static let hookIdentity = "codexbar-session-status-hook.py"
     private static let hookTimeout = 2
 
-    // Keep hooks on low-frequency conversation events. Tool hooks can receive
-    // large payloads and should not sit on Codex's main turn path just to update
-    // the menu bar lights.
+    // PermissionRequest now also runs before Codex's automatic approval review.
+    // PostToolUse lets the app retract that provisional attention state when the
+    // request was handled without user interaction.
     private static let specs: [CodexHookSpec] = [
         CodexHookSpec(
             event: "SessionStart",
@@ -69,6 +69,12 @@ final class CodexHookInstallerService: ObservableObject {
             matcher: "*",
             scriptArguments: ["PermissionRequest"],
             statusMessage: "Marking CodexAppBar attention"
+        ),
+        CodexHookSpec(
+            event: "PostToolUse",
+            matcher: "*",
+            scriptArguments: ["PostToolUse"],
+            statusMessage: "Syncing CodexAppBar activity"
         ),
         CodexHookSpec(
             event: "Stop",

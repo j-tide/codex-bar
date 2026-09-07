@@ -7,8 +7,8 @@ example:
     python3 codexbar-session-status-hook.py UserPromptSubmit
 
 Only a small, privacy-safe projection of the hook payload is persisted. The
-script deliberately produces no stdout/stderr output and always exits zero so
-status reporting can never block a Codex turn.
+script produces only the empty JSON object required by Stop hooks and always
+exits zero so status reporting can never block a Codex turn.
 """
 
 import datetime as _dt
@@ -27,6 +27,7 @@ EVENT_STATUS = {
     "SessionStart": ("ready", "connecting"),
     "UserPromptSubmit": ("running", "processing"),
     "PermissionRequest": ("needs_attention", "awaiting_permission"),
+    "PostToolUse": ("running", "processing"),
     "Stop": ("ready", "waiting_input"),
 }
 
@@ -260,6 +261,10 @@ def main():
         out_dir / "session_status.json",
         _legacy_status(state, phase, project_name, updated_at, event),
     )
+
+    # Current Codex releases require successful Stop hooks to return JSON.
+    if event == "Stop":
+        sys.stdout.write("{}\n")
 
 
 if __name__ == "__main__":
