@@ -358,6 +358,14 @@ enum L {
     }
     static var codexResetWindowFallback: String { zh ? "速蹬窗口已开启" : "Speedrun window is open" }
     static var codexResetWindowSourceHelp: String { zh ? "打开官方证据" : "Open official source" }
+    static var radarScoreTitle: String { zh ? "雷达智力分" : "Radar Intelligence" }
+    static var radarScoreExplanationTitle: String { zh ? "评分说明" : "About the score" }
+    static var radarScoreMethod: String {
+        zh ? "Codex Radar 社区评测。综合智能按软件工程与视觉空间推理的有效题量加权，仅纳入两项均有成绩的模型档位。IQ 不是百分制；排名按原始分数，显示取整。"
+           : "Community benchmarks by Codex Radar. Overall IQ weights coding and spatial reasoning by valid tasks, requiring both dimensions. IQ is not a percentage. Ranks use unrounded scores."
+    }
+    static var radarScoreCached: String { zh ? "上次数据" : "Cached" }
+    static var radarScoreUpdated: String { zh ? "数据源更新时间" : "Source updated at" }
     static var modelQualityTitle: String { zh ? "模型质量" : "Model Quality" }
     static var modelQualityRefreshHelp: String { zh ? "刷新模型质量" : "Refresh model quality" }
     static var modelQualityOpenHelp: String { zh ? "打开 CodexRadar" : "Open CodexRadar" }
