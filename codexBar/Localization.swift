@@ -83,8 +83,8 @@ enum L {
     }
     static var codexHookSetupDetail: String {
         zh
-            ? "红绿灯需要通过 Codex hooks 获取当前会话的运行、就绪和权限状态。安装后，Codex 提示时请信任这个 hook。"
-            : "Traffic lights use Codex hooks to read running, ready, and permission states. After installing, trust this hook when Codex asks."
+            ? "红绿灯需要通过 Codex hooks 获取当前会话的运行和就绪状态。安装后，Codex 提示时请信任这个 hook。"
+            : "Traffic lights use Codex hooks to read running and ready states. After installing, trust this hook when Codex asks."
     }
     static var codexHookInstallButton: String { zh ? "安装钩子" : "Install Hooks" }
     static var codexHookUpdateButton: String { zh ? "更新钩子" : "Update Hooks" }

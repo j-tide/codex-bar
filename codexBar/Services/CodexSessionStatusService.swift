@@ -107,13 +107,15 @@ final class CodexSessionStatusService: ObservableObject {
             return
         }
 
+        let isLegacyPermissionCandidate = payload.light == .needsAttention
+            && payload.source == "PermissionRequest"
         status = CodexSessionStatus(
-            light: payload.light,
-            phase: payload.phase,
+            light: isLegacyPermissionCandidate ? .running : payload.light,
+            phase: isLegacyPermissionCandidate ? nil : payload.phase,
             title: payload.title,
             updatedAt: Self.parseDate(payload.updatedAt) ?? modifiedAt,
             source: payload.source,
-            detail: payload.detail
+            detail: isLegacyPermissionCandidate ? nil : payload.detail
         )
         updateStaleness()
     }

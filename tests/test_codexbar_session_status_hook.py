@@ -75,13 +75,6 @@ class HookV2Tests(unittest.TestCase):
             ("SessionStart", None, "ready", "connecting"),
             ("SessionStart", "compact", "running", "compacting"),
             ("UserPromptSubmit", None, "running", "processing"),
-            (
-                "PermissionRequest",
-                None,
-                "needs_attention",
-                "awaiting_permission",
-            ),
-            ("PostToolUse", None, "running", "processing"),
             ("Stop", None, "ready", "waiting_input"),
         ]
 
@@ -156,42 +149,17 @@ class HookV2Tests(unittest.TestCase):
         self.assertEqual(second["phase"], "waiting_input")
         self.assertNotEqual(first["eventKey"], second["eventKey"])
 
-    def test_post_tool_use_retracts_provisional_permission_attention(self):
+    def test_permission_and_post_tool_events_are_ignored_even_for_cached_hooks(self):
         payload = self.base_payload()
-        payload.update({
-            "tool_name": "Bash",
-            "tool_input": {"command": "private-command"},
-            "tool_response": {"output": "private-output"},
-        })
-        self.invoke("PermissionRequest", payload)
-        self.assertEqual(self.read_session("session-alpha")["state"], "needs_attention")
+        self.invoke("UserPromptSubmit", payload)
+        before = self.session_file("session-alpha").read_bytes()
 
-        result = self.invoke("PostToolUse", payload)
+        permission = self.invoke("PermissionRequest", payload)
+        post_tool = self.invoke("PostToolUse", payload)
 
-        self.assert_success_without_output(result)
-        output = self.read_session("session-alpha")
-        self.assertEqual(output["state"], "running")
-        self.assertEqual(output["phase"], "processing")
-        self.assertEqual(output["source"], "PostToolUse")
-
-    def test_permission_event_key_deduplicates_retries_but_not_distinct_requests(self):
-        payload = self.base_payload()
-        payload.update({
-            "tool_name": "Bash",
-            "tool_input": {"command": "private-command", "description": "secret"},
-        })
-        self.invoke("PermissionRequest", payload)
-        first_key = self.read_session("session-alpha")["eventKey"]
-
-        self.invoke("PermissionRequest", payload)
-        retry_key = self.read_session("session-alpha")["eventKey"]
-
-        payload["tool_input"] = {"command": "a-different-private-command"}
-        self.invoke("PermissionRequest", payload)
-        distinct_key = self.read_session("session-alpha")["eventKey"]
-
-        self.assertEqual(first_key, retry_key)
-        self.assertNotEqual(first_key, distinct_key)
+        self.assert_success_without_output(permission)
+        self.assert_success_without_output(post_tool)
+        self.assertEqual(self.session_file("session-alpha").read_bytes(), before)
 
     def test_v2_and_legacy_outputs_never_persist_sensitive_fields(self):
         payload = self.base_payload("raw-session-id", "raw-turn-id")
@@ -204,7 +172,7 @@ class HookV2Tests(unittest.TestCase):
             "tool_name": "Bash",
             "tool_input": {"command": "private shell command"},
         })
-        self.invoke("PermissionRequest", payload)
+        self.invoke("UserPromptSubmit", payload)
 
         v2 = self.read_session("raw-session-id")
         legacy = self.read_legacy()
@@ -223,7 +191,7 @@ class HookV2Tests(unittest.TestCase):
         for forbidden in forbidden_values:
             self.assertNotIn(forbidden, persisted)
         self.assertIn("secret-project", persisted)
-        self.assertEqual(legacy["detail"], "Codex 需要你处理")
+        self.assertIsNone(legacy["detail"])
 
     def test_direct_model_and_project_basename_are_preserved(self):
         payload = self.base_payload()
@@ -317,7 +285,7 @@ class HookV2Tests(unittest.TestCase):
 
         reader_thread = threading.Thread(target=reader)
         reader_thread.start()
-        events = ["UserPromptSubmit", "PermissionRequest", "Stop"] * 12
+        events = ["UserPromptSubmit", "SessionStart", "Stop"] * 12
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
                 futures = []

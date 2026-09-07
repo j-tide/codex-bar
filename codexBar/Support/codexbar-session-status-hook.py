@@ -26,8 +26,6 @@ SCHEMA_VERSION = 2
 EVENT_STATUS = {
     "SessionStart": ("ready", "connecting"),
     "UserPromptSubmit": ("running", "processing"),
-    "PermissionRequest": ("needs_attention", "awaiting_permission"),
-    "PostToolUse": ("running", "processing"),
     "Stop": ("ready", "waiting_input"),
 }
 
@@ -126,26 +124,8 @@ def _project_name(payload):
     return _clean_text(name, 120, fallback="Unknown")
 
 
-def _canonical_json(value):
-    try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-    except (TypeError, ValueError):
-        return ""
-
-
 def _event_key(payload, session_id, turn_id, event, variant):
-    """Build a stable, opaque key for de-duplicating one logical hook event.
-
-    Turn-scoped events use the raw turn id only as hash input. Permission
-    requests also include the tool name/input so two distinct approvals in one
-    turn remain distinct, while a retried delivery of the same approval keeps
-    the same key. None of these source values are persisted.
-    """
+    """Build a stable, opaque key for de-duplicating one logical hook event."""
 
     parts = [
         "codexbar-task-event-v2",
@@ -154,9 +134,6 @@ def _event_key(payload, session_id, turn_id, event, variant):
         event,
         variant or "",
     ]
-    if event == "PermissionRequest":
-        parts.append(_string_value(payload.get("tool_name")) or "")
-        parts.append(_canonical_json(payload.get("tool_input")))
     return _sha256("\0".join(parts))
 
 

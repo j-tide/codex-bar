@@ -42,9 +42,11 @@ final class CodexHookInstallerService: ObservableObject {
     private static let hookIdentity = "codexbar-session-status-hook.py"
     private static let hookTimeout = 2
 
-    // PermissionRequest now also runs before Codex's automatic approval review.
-    // PostToolUse lets the app retract that provisional attention state when the
-    // request was handled without user interaction.
+    // PermissionRequest is intentionally not installed. It fires before the
+    // final approval decision, including requests that another hook or Codex's
+    // automatic review allows without showing anything to the user. Treating it
+    // as user attention creates false notifications. PostToolUse is unnecessary
+    // once that provisional state is no longer recorded.
     private static let specs: [CodexHookSpec] = [
         CodexHookSpec(
             event: "SessionStart",
@@ -63,18 +65,6 @@ final class CodexHookInstallerService: ObservableObject {
             matcher: nil,
             scriptArguments: ["UserPromptSubmit"],
             statusMessage: "Marking CodexAppBar running"
-        ),
-        CodexHookSpec(
-            event: "PermissionRequest",
-            matcher: "*",
-            scriptArguments: ["PermissionRequest"],
-            statusMessage: "Marking CodexAppBar attention"
-        ),
-        CodexHookSpec(
-            event: "PostToolUse",
-            matcher: "*",
-            scriptArguments: ["PostToolUse"],
-            statusMessage: "Syncing CodexAppBar activity"
         ),
         CodexHookSpec(
             event: "Stop",

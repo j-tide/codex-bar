@@ -39,6 +39,38 @@ final class TaskCenterCoreTests: XCTestCase {
         XCTAssertEqual(try fixture.permissions(of: fixture.sessionsURL), 0o700)
     }
 
+    func testRepositoryDowngradesLegacyPermissionCandidateToRunning() throws {
+        let fixture = try Fixture(now: fixedNow)
+        defer { fixture.remove() }
+        try fixture.write(
+            record(
+                key: "old-permission",
+                state: .needsAttention,
+                phase: .awaitingPermission,
+                age: 5,
+                source: "PermissionRequest"
+            )
+        )
+
+        let result = fixture.repository.load()
+
+        XCTAssertEqual(result.records.first?.state, .running)
+        XCTAssertEqual(result.records.first?.phase, .processing)
+        XCTAssertEqual(result.records.first?.source, "PermissionRequest")
+    }
+
+    func testRepositoryDowngradesLegacyPermissionFallbackToRunning() throws {
+        let fixture = try Fixture(now: fixedNow)
+        defer { fixture.remove() }
+        try fixture.writeLegacy(state: "needs_attention", source: "PermissionRequest", age: 5)
+
+        let result = fixture.repository.load()
+
+        XCTAssertTrue(result.isLegacyFallback)
+        XCTAssertEqual(result.records.first?.state, .running)
+        XCTAssertEqual(result.records.first?.phase, .processing)
+    }
+
     func testRepositoryDeletesRecordsOlderThanTwentyFourHours() throws {
         let fixture = try Fixture(now: fixedNow)
         defer { fixture.remove() }
@@ -422,7 +454,8 @@ final class TaskCenterCoreTests: XCTestCase {
         state: TaskActivityState,
         phase: TaskActivityPhase,
         age: TimeInterval,
-        project: String = "codexbar"
+        project: String = "codexbar",
+        source eventSource: String? = nil
     ) -> TaskActivityRecord {
         TaskActivityRecord(
             taskKey: key,
@@ -433,7 +466,7 @@ final class TaskCenterCoreTests: XCTestCase {
             projectName: project,
             model: "gpt-5",
             updatedAt: fixedNow.addingTimeInterval(-age),
-            source: source(for: phase)
+            source: eventSource ?? source(for: phase)
         )
     }
 

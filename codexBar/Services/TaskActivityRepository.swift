@@ -176,7 +176,8 @@ final class TaskActivityRepository {
                     throw TaskActivityRepositoryError.invalidRecord
                 }
                 let data = try Data(contentsOf: fileURL)
-                let record = try decoder.decode(TaskActivityRecord.self, from: data)
+                let decodedRecord = try decoder.decode(TaskActivityRecord.self, from: data)
+                let record = normalizeLegacyPermissionAttention(decodedRecord)
                 try validate(record, fileURL: fileURL, at: currentDate)
 
                 if currentDate.timeIntervalSince(record.updatedAt) >= Self.retentionInterval {
@@ -317,6 +318,28 @@ final class TaskActivityRepository {
         }
     }
 
+    private func normalizeLegacyPermissionAttention(_ record: TaskActivityRecord) -> TaskActivityRecord {
+        guard record.state == .needsAttention,
+              record.source == "PermissionRequest" else { return record }
+
+        // Older CodexAppBar releases persisted PermissionRequest as though the
+        // approval prompt had reached the user. Codex can auto-approve after
+        // this hook fires, so surface these records as ordinary running work.
+        return TaskActivityRecord(
+            schemaVersion: record.schemaVersion,
+            taskKey: record.taskKey,
+            turnKey: record.turnKey,
+            eventKey: record.eventKey,
+            state: .running,
+            phase: .processing,
+            projectName: record.projectName,
+            model: record.model,
+            updatedAt: record.updatedAt,
+            source: record.source,
+            isStale: record.isStale
+        )
+    }
+
     private var quarantineURL: URL {
         sessionsURL.appendingPathComponent(".invalid", isDirectory: true)
     }
@@ -366,7 +389,10 @@ final class TaskActivityRepository {
         guard fileManager.fileExists(atPath: legacyStatusURL.path) else { return nil }
         let data = try Data(contentsOf: legacyStatusURL)
         let payload = try decoder.decode(LegacyTaskStatusPayload.self, from: data)
-        guard let state = TaskActivityState(rawValue: payload.state ?? "") else { return nil }
+        guard var state = TaskActivityState(rawValue: payload.state ?? "") else { return nil }
+        if state == .needsAttention, payload.source == "PermissionRequest" {
+            state = .running
+        }
 
         let attributes = try? fileManager.attributesOfItem(atPath: legacyStatusURL.path)
         let modifiedAt = attributes?[.modificationDate] as? Date
