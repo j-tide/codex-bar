@@ -62,7 +62,7 @@ CodexAppBar 是一个面向 Codex 用户的 macOS 菜单栏工具。它把多账
 | 额度监控 | Plus 展示 Codex 5h 滚动额度和 7d 周额度，Pro 仅展示 7d 周额度；包含重置时间，并支持“已用 / 剩余”口径切换。 |
 | 菜单栏状态 | 在 macOS 菜单栏按账号计划展示单/双额度进度条，并用颜色提示账号健康状态。 |
 | Codex 会话红绿灯 | 安装 hooks 后，可显示 Codex 当前是 ready、running、等待权限、离线还是状态过期。 |
-| 模型质量 | 接入 [codexradar.com](https://codexradar.com/)，展示 Model IQ、通过题数和模型对比结果。 |
+| 模型质量 | 接入 [codexradar.com](https://codexradar.com/)，展示雷达智力分综合评分前六名。综合分按两个单项的有效题量加权；每 15 分钟刷新，失败时保留上次数据。 |
 | 邀请重置次数 | 展示可用的 Codex rate-limit reset 次数，并通过官方接口获取重置机会到期时间。 |
 | 本地 Token 统计 | 只读查询 Codex 本地 SQLite，展示今日 / 本周 / 本月 Token 用量、会话数和近 16 周热力图。 |
 | 一键全局刷新 | 右上角刷新会同时更新账号 token、额度、模型质量和本地 Token 统计。 |
@@ -130,7 +130,8 @@ CodexAppBar 不依赖自建后端，数据来自本机 Codex 文件和 OpenAI / 
 | 当前激活账号 | `~/.codex/auth.json` |
 | 额度用量 | `https://chatgpt.com/backend-api/wham/usage` |
 | 账号 / 组织信息 | `https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27` |
-| 模型质量 | `https://codexradar.com/current.json` |
+| 模型质量 | `https://codexradar.com/api/intelligence-efficiency-metrics`、`https://codexradar.com/api/visual-spatial-reasoning` |
+| 重置窗口 | `https://codexradar.com/current.json` |
 | 本地 Token 用量 | `~/.codex/state_5.sqlite` 或旧版路径 `~/.codex/sqlite/state_5.sqlite` |
 | hooks 配置 | `~/.codex/hooks.json` |
 | 会话状态 hook | `~/.codex/codexbar/codexbar-session-status-hook.py` |

@@ -62,7 +62,7 @@ CodexAppBar is a macOS menu bar companion for Codex users. It brings account man
 | Quota monitoring | Show both 5-hour and 7-day quotas for Plus, and only the 7-day quota for Pro, including reset times and used / remaining display modes. |
 | Menu bar status | Keep plan-aware single or dual quota bars visible in the macOS menu bar, with account-health colors. |
 | Codex session lights | Install Codex hooks to show whether Codex is ready, running, waiting for permission, offline, or stale. |
-| Model quality | Display CodexRadar Model IQ, pass count, and comparison entries from [codexradar.com](https://codexradar.com/). |
+| Model quality | Display intelligence rankings from [codexradar.com](https://codexradar.com/) showing the top six tiers by overall score. Overall IQ is weighted by valid tasks in both dimensions. Refresh every 15 minutes and retain the last successful data on failure. |
 | Banked resets | Show banked Codex rate-limit reset count and fetch reset-credit expiration from the official endpoint. |
 | Local token usage | Read local Codex SQLite state to show today / week / month token usage, session count, and a 16-week heatmap. |
 | Global refresh | Refresh account tokens, quota usage, model quality, and local usage stats from the top-right refresh button. |
@@ -130,7 +130,8 @@ CodexAppBar does not require a hosted backend. It combines local Codex files wit
 | Active account | `~/.codex/auth.json` |
 | Quota usage | `https://chatgpt.com/backend-api/wham/usage` |
 | Account / organization metadata | `https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27` |
-| Model quality | `https://codexradar.com/current.json` |
+| Model quality | `https://codexradar.com/api/intelligence-efficiency-metrics`, `https://codexradar.com/api/visual-spatial-reasoning` |
+| Reset window | `https://codexradar.com/current.json` |
 | Local token usage | `~/.codex/state_5.sqlite` or the legacy path `~/.codex/sqlite/state_5.sqlite` |
 | Hook configuration | `~/.codex/hooks.json` |
 | Session status hook | `~/.codex/codexbar/codexbar-session-status-hook.py` |
