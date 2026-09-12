@@ -44,18 +44,24 @@ final class TokenStatsService: ObservableObject {
     @Published var loading = false
 
     private var currentTask: Task<Void, Never>?
+    private var lastSuccessfulRefresh = Date.distantPast
+    private var cachedSnapshot: CodexStatsDB.Snapshot?
+
+    func refreshIfNeeded() {
+        guard !loading, Date().timeIntervalSince(lastSuccessfulRefresh) >= 15 else { return }
+        refresh()
+    }
 
     func switchTo(_ r: TokenStatsRange) {
         guard r != range else { return }
         range = r
-        stat = nil
-        refresh()
+        if let cachedSnapshot { stat = cachedSnapshot.windowStat(since: r.since) }
+        refreshIfNeeded()
     }
 
     func refresh() {
         currentTask?.cancel()
         let since = range.since
-        let r = range
         // 热力图固定窗口：近 ~17 周
         let heatSince = Calendar(identifier: .gregorian).date(byAdding: .day, value: -119, to: Date()) ?? since
         loading = true
@@ -65,13 +71,14 @@ final class TokenStatsService: ObservableObject {
             }.value
 
             guard !Task.isCancelled, let self else { return }
-            if self.range == r {
-                if let snapshot {
-                    self.stat = snapshot.stat
-                    self.daily = snapshot.dailyTokens
-                }
-                self.loading = false
+            if let snapshot {
+                self.cachedSnapshot = snapshot
+                let stat = snapshot.windowStat(since: self.range.since)
+                if self.stat != stat { self.stat = stat }
+                if self.daily != snapshot.dailyTokens { self.daily = snapshot.dailyTokens }
+                self.lastSuccessfulRefresh = Date()
             }
+            self.loading = false
         }
     }
 }

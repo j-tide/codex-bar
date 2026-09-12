@@ -1,11 +1,10 @@
 import Foundation
 import SQLite3
 
-/// 只读查询 Codex state_5.sqlite 的 threads 表。
-/// codex 自维护每个 thread 的 tokens_used（累计）+ updated_at，单条带索引 SQL 毫秒级。
-/// 只读打开，不锁库，不影响正在运行的 Codex（WAL 允许并发读）。
+/// Read-only Codex metadata access. Calendar usage comes from timestamped rollout
+/// increments; threads.tokens_used is a lifetime counter and cannot be grouped by updated_at.
 struct CodexStatsDB {
-    struct WindowStat: Sendable {
+    struct WindowStat: Equatable, Sendable {
         var threadCount: Int
         var totalTokens: Int
 
@@ -18,6 +17,19 @@ struct CodexStatsDB {
     struct Snapshot: Sendable {
         let stat: WindowStat
         let dailyTokens: [String: Int]
+        let dailyThreads: [String: Set<String>]
+
+        nonisolated func windowStat(since: Date, calendar: Calendar = Calendar(identifier: .gregorian)) -> WindowStat {
+            let formatter = DateFormatter()
+            formatter.calendar = calendar
+            formatter.timeZone = calendar.timeZone
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy-MM-dd"
+            let start = formatter.string(from: since)
+            let total = dailyTokens.filter { $0.key >= start }.values.reduce(0, +)
+            let threads = dailyThreads.filter { $0.key >= start }.values.reduce(into: Set<String>()) { $0.formUnion($1) }
+            return WindowStat(threadCount: threads.count, totalTokens: total)
+        }
     }
 
     nonisolated private static var homeDirectory: URL {
@@ -114,39 +126,11 @@ struct CodexStatsDB {
         return read(db)
     }
 
-    /// 在同一个只读连接内读取区间统计与热力图，避免一次刷新混用迁移前后的两个库。
+    /// threads.tokens_used is lifetime usage, not usage on updated_at's day.
     nonisolated static func snapshot(statSince: Date, dailySince: Date) -> Snapshot? {
-        readFromCurrentDB { db in
-            var stat = WindowStat()
-            let statSQL = "SELECT COUNT(*), COALESCE(SUM(tokens_used), 0) FROM threads WHERE updated_at >= ?;"
-            var statStmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, statSQL, -1, &statStmt, nil) == SQLITE_OK else { return nil }
-            defer { sqlite3_finalize(statStmt) }
-
-            sqlite3_bind_int64(statStmt, 1, Int64(statSince.timeIntervalSince1970))
-            guard sqlite3_step(statStmt) == SQLITE_ROW else { return nil }
-            stat.threadCount = Int(sqlite3_column_int64(statStmt, 0))
-            stat.totalTokens = Int(sqlite3_column_int64(statStmt, 1))
-
-            var out: [String: Int] = [:]
-            // SQLite 直接按本地时区分组成日期串
-            let dailySQL = """
-            SELECT date(updated_at, 'unixepoch', 'localtime') d, SUM(tokens_used) t
-            FROM threads WHERE updated_at >= ? GROUP BY d;
-            """
-            var dailyStmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, dailySQL, -1, &dailyStmt, nil) == SQLITE_OK else { return nil }
-            defer { sqlite3_finalize(dailyStmt) }
-
-            sqlite3_bind_int64(dailyStmt, 1, Int64(dailySince.timeIntervalSince1970))
-            while sqlite3_step(dailyStmt) == SQLITE_ROW {
-                guard let day = sqlite3_column_text(dailyStmt, 0).map({ String(cString: $0) }) else {
-                    continue
-                }
-                out[day] = Int(sqlite3_column_int64(dailyStmt, 1))
-            }
-
-            return Snapshot(stat: stat, dailyTokens: out)
-        }
+        let home = homeDirectory.appendingPathComponent(".codex")
+        return CodexTokenUsageIndex.shared.snapshot(
+            roots: [home.appendingPathComponent("sessions"), home.appendingPathComponent("archived_sessions")],
+            statSince: statSince, dailySince: dailySince)
     }
 }
