@@ -131,7 +131,7 @@ final class CodexRadarPresentationTests: XCTestCase {
     }
 
     @MainActor
-    func testLeaderboardRendersAtPopoverWidth() throws {
+    func testTableRendersAtPopoverWidth() throws {
         let modelIQ = CodexRadarModelIQ(
             latest: entry(score: 105, model: "gpt-5.6-sol", effort: "max", passed: 7, tasks: 10),
             comparisons: [
@@ -147,7 +147,7 @@ final class CodexRadarPresentationTests: XCTestCase {
         )
         let matrix = CodexRadarPresentation.matrix(from: modelIQ)
         let content = VStack(alignment: .leading, spacing: 8) {
-            CodexRadarLeaderboardView(matrix: matrix)
+            CodexRadarTableView(matrix: matrix)
 
             if let best = matrix.cell(id: matrix.bestCellID) {
                 Text("第 1 名：\(best.displayName) · IQ \(CodexRadarPresentation.scoreText(best.score)) · 通过 8/10 题")
@@ -155,7 +155,8 @@ final class CodexRadarPresentationTests: XCTestCase {
                     .foregroundColor(.secondary)
             }
         }
-        .frame(width: 276, alignment: .leading)
+        .environment(\.popupLiveUpdates, false)
+        .frame(width: 339.5, alignment: .leading)
         .padding(12)
         .background(Color(nsColor: .windowBackgroundColor))
 
@@ -167,7 +168,7 @@ final class CodexRadarPresentationTests: XCTestCase {
         let pngData = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
         try pngData.write(to: URL(fileURLWithPath: "/tmp/codexbar-leaderboard-rendered.png"))
 
-        XCTAssertEqual(image.size.width, 300, accuracy: 0.5)
+        XCTAssertEqual(image.size.width, 363.5, accuracy: 0.5)
     }
 
     private func comparison(

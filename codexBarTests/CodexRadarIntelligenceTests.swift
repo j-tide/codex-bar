@@ -83,8 +83,9 @@ final class CodexRadarIntelligenceTests: XCTestCase {
                 .background(scheme == .light ? Color.white : Color(nsColor: .windowBackgroundColor))
                 .environment(\.colorScheme, scheme)
             let size = try render(content, name: name)
-            XCTAssertEqual(size.width, 300, accuracy: 0.5)
-            XCTAssertLessThan(size.height, 300)
+            XCTAssertEqual(size.width, PopupLayout.columnWidth, accuracy: 0.5)
+            let rows = CodexRadarPresentation.matrix(from: report.modelIQ(for: .comprehensive)).rows.count
+            XCTAssertLessThanOrEqual(size.height, max(252, CodexRadarTableView.height(rowCount: rows) + 96))
         }
         _ = try render(CodexRadarQualityContent(report: nil, isRefreshing: true, error: nil), name: "loading")
         _ = try render(CodexRadarQualityContent(report: nil, isRefreshing: false, error: "Network unavailable"), name: "error")
@@ -102,7 +103,7 @@ final class CodexRadarIntelligenceTests: XCTestCase {
     }
 
     private func render<V: View>(_ content: V, name: String) throws -> CGSize {
-        let hosting = NSHostingView(rootView: content)
+        let hosting = NSHostingView(rootView: content.environment(\.popupLiveUpdates, false).frame(width: PopupLayout.columnWidth))
         let size = hosting.fittingSize
         hosting.frame = NSRect(origin: .zero, size: size)
         let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
