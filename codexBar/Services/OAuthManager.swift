@@ -3,153 +3,145 @@ import AppKit
 import Combine
 import CryptoKit
 
+@MainActor
 class OAuthManager: NSObject, ObservableObject {
     static let shared = OAuthManager()
-
-    // OpenAI OAuth 参数（与 Codex Desktop 保持一致）
     private let clientId = "app_EMoamEEZ73f0CkXaXp7hrann"
-    private let redirectURI = "http://localhost:1455/auth/callback"
     private let authURL = "https://auth.openai.com/oauth/authorize"
     private let tokenURL = "https://auth.openai.com/oauth/token"
     private let scope = "openid profile email offline_access api.connectors.read api.connectors.invoke"
-
-    private var codeVerifier: String = ""
-    private var expectedState: String = ""
+    private let callbackPort: UInt16
+    private let timeout: TimeInterval
+    private let openURL: (URL) -> Bool
+    @Published private(set) var isAuthorizing = false
+    private var attemptID: UUID?
+    private var codeVerifier = ""
     private var localServer: LocalCallbackServer?
     private var completionHandler: ((Result<OAuthTokens, Error>) -> Void)?
+    private var timeoutWork: DispatchWorkItem?
+    private var tokenTask: URLSessionDataTask?
+    private var receivedCode = false
+    private var redirectURI = ""
+
+    init(callbackPort: UInt16 = 1455, timeout: TimeInterval = 180,
+         openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }) {
+        self.callbackPort = callbackPort
+        self.timeout = timeout
+        self.openURL = openURL
+        super.init()
+    }
 
     func startOAuth(completion: @escaping (Result<OAuthTokens, Error>) -> Void) {
-        guard completionHandler == nil else {
-            completion(.failure(OAuthError.alreadyInProgress))
+        // A fresh user action replaces an abandoned browser flow immediately.
+        cancelOAuth()
+        let id = UUID()
+        attemptID = id
+        completionHandler = completion
+        isAuthorizing = true
+        receivedCode = false
+        codeVerifier = generateCodeVerifier()
+        let state = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        let server = LocalCallbackServer(port: callbackPort)
+        localServer = server
+        do {
+            try server.start(expectedState: state) { [weak self] code in
+                guard let self, self.attemptID == id, !self.receivedCode else { return }
+                self.receivedCode = true
+                self.exchangeCode(code, id: id)
+            }
+        } catch {
+            finish(.failure(error), id: id)
             return
         }
-        completionHandler = completion
-
-        codeVerifier = generateCodeVerifier()
-        let codeChallenge = generateCodeChallenge(from: codeVerifier)
-        expectedState = UUID().uuidString.replacingOccurrences(of: "-", with: "")
-
+        redirectURI = "http://localhost:\(server.listeningPort)/auth/callback"
         var components = URLComponents(string: authURL)!
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: clientId),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
             URLQueryItem(name: "scope", value: scope),
-            URLQueryItem(name: "code_challenge", value: codeChallenge),
+            URLQueryItem(name: "code_challenge", value: generateCodeChallenge(from: codeVerifier)),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "id_token_add_organizations", value: "true"),
             URLQueryItem(name: "codex_cli_simplified_flow", value: "true"),
-            URLQueryItem(name: "state", value: expectedState),
-            URLQueryItem(name: "originator", value: "Codex Desktop"),
+            URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "originator", value: "Codex Desktop")
         ]
-
-        guard let url = components.url else {
-            fail(OAuthError.invalidURL)
-            return
+        guard let url = components.url else { finish(.failure(OAuthError.invalidURL), id: id); return }
+        let expiration = DispatchWorkItem { [weak self] in
+            self?.finish(.failure(OAuthError.timedOut), id: id)
         }
-
-        localServer = LocalCallbackServer(port: 1455)
-        localServer?.start { [weak self] code, returnedState in
-            guard let self else { return }
-            guard returnedState == self.expectedState else {
-                self.fail(OAuthError.stateMismatch)
-                return
-            }
-            self.exchangeCode(code)
-        }
-
-        NSWorkspace.shared.open(url)
+        timeoutWork = expiration
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: expiration)
+        guard openURL(url) else { finish(.failure(OAuthError.browserUnavailable), id: id); return }
     }
 
-    // MARK: - Private
+    func cancelOAuth() {
+        guard let id = attemptID else { return }
+        finish(.failure(OAuthError.cancelled), id: id)
+    }
 
-    private func exchangeCode(_ code: String, attempt: Int = 0) {
-        guard let url = URL(string: tokenURL) else {
-            fail(OAuthError.invalidURL)
-            return
-        }
+    private func finish(_ result: Result<OAuthTokens, Error>, id: UUID) {
+        guard attemptID == id else { return }
+        attemptID = nil
+        timeoutWork?.cancel()
+        timeoutWork = nil
+        tokenTask?.cancel()
+        tokenTask = nil
+        localServer?.stop()
+        localServer = nil
+        codeVerifier = ""
+        isAuthorizing = false
+        let completion = completionHandler
+        completionHandler = nil
+        completion?(result)
+    }
+
+    private func exchangeCode(_ code: String, id: UUID, attempt: Int = 0) {
+        guard attemptID == id else { return }
+        guard let url = URL(string: tokenURL) else { finish(.failure(OAuthError.invalidURL), id: id); return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 30
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
         let allowed = CharacterSet.alphanumerics.union(.init(charactersIn: "-._~"))
-        let body: [String: String] = [
-            "grant_type": "authorization_code",
-            "client_id": clientId,
-            "code": code,
-            "redirect_uri": redirectURI,
-            "code_verifier": codeVerifier,
-        ]
-        request.httpBody = body
-            .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: allowed) ?? $0.value)" }
-            .joined(separator: "&")
-            .data(using: .utf8)
-
-        // 第一次用 URLSession.shared；重试时用 ephemeral 强制建新连接，
-        // 绕开连接池里可能复用的死 QUIC/HTTP3 连接（这是 -1005 的常见根因）。
-        let session: URLSession
-        if attempt == 0 {
-            session = URLSession.shared
-        } else {
-            let config = URLSessionConfiguration.ephemeral
-            config.timeoutIntervalForRequest = 30
-            config.waitsForConnectivity = false
-            session = URLSession(configuration: config)
-        }
-
-        session.dataTask(with: request) { [weak self] data, _, error in
-            guard let self else { return }
-            if let error {
-                // -1005 connection lost / -1001 timeout / -1004 cannot connect: 重试最多 2 次
-                let nsErr = error as NSError
-                let transient = [NSURLErrorNetworkConnectionLost, NSURLErrorTimedOut, NSURLErrorCannotConnectToHost]
-                if attempt < 2, nsErr.domain == NSURLErrorDomain, transient.contains(nsErr.code) {
-                    let backoff: TimeInterval = attempt == 0 ? 0.6 : 1.5
-                    DispatchQueue.global().asyncAfter(deadline: .now() + backoff) {
-                        self.exchangeCode(code, attempt: attempt + 1)
-                    }
+        let body = ["grant_type": "authorization_code", "client_id": clientId, "code": code,
+                    "redirect_uri": redirectURI, "code_verifier": codeVerifier]
+        request.httpBody = body.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: allowed) ?? $0.value)" }
+            .joined(separator: "&").data(using: .utf8)
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 30
+        config.waitsForConnectivity = false
+        let session = URLSession(configuration: config)
+        tokenTask = session.dataTask(with: request) { [weak self] data, _, error in
+            session.finishTasksAndInvalidate()
+            DispatchQueue.main.async {
+                guard let self, self.attemptID == id else { return }
+                if let error {
+                    let nsError = error as NSError
+                    let transient = [NSURLErrorNetworkConnectionLost, NSURLErrorTimedOut, NSURLErrorCannotConnectToHost]
+                    if attempt < 2, nsError.domain == NSURLErrorDomain, transient.contains(nsError.code) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0.6 : 1.5)) { [weak self] in
+                            self?.exchangeCode(code, id: id, attempt: attempt + 1)
+                        }
+                    } else { self.finish(.failure(error), id: id) }
                     return
                 }
-                self.fail(error)
-                return
+                guard let data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    self.finish(.failure(OAuthError.noToken), id: id); return
+                }
+                if let message = json["error"] as? String {
+                    self.finish(.failure(OAuthError.serverError(message)), id: id); return
+                }
+                guard let access = json["access_token"] as? String,
+                      let refresh = json["refresh_token"] as? String,
+                      let identity = json["id_token"] as? String else {
+                    self.finish(.failure(OAuthError.noToken), id: id); return
+                }
+                self.finish(.success(OAuthTokens(accessToken: access, refreshToken: refresh, idToken: identity)), id: id)
             }
-            guard let data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                self.fail(OAuthError.noToken)
-                return
-            }
-            if let errMsg = json["error"] as? String {
-                let desc = json["error_description"] as? String ?? ""
-                self.fail(OAuthError.serverError("\(errMsg): \(desc)"))
-                return
-            }
-            guard let accessToken = json["access_token"] as? String,
-                  let refreshToken = json["refresh_token"] as? String,
-                  let idToken = json["id_token"] as? String else {
-                self.fail(OAuthError.noToken)
-                return
-            }
-            let tokens = OAuthTokens(
-                accessToken: accessToken,
-                refreshToken: refreshToken,
-                idToken: idToken
-            )
-            DispatchQueue.main.async {
-                self.localServer?.stop()
-                self.localServer = nil
-                self.completionHandler?(.success(tokens))
-                self.completionHandler = nil
-            }
-        }.resume()
-    }
-
-    private func fail(_ error: Error) {
-        DispatchQueue.main.async {
-            self.localServer?.stop()
-            self.localServer = nil
-            self.completionHandler?(.failure(error))
-            self.completionHandler = nil
         }
+        tokenTask?.resume()
     }
 
     private func generateCodeVerifier() -> String {
@@ -178,185 +170,141 @@ struct OAuthTokens {
 }
 
 enum OAuthError: LocalizedError {
-    case invalidURL, stateMismatch, noToken, alreadyInProgress
+    case invalidURL, noToken, cancelled, timedOut, browserUnavailable, callbackUnavailable
     case serverError(String)
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "无效的授权 URL"
-        case .stateMismatch: return "State 验证失败"
-        case .noToken: return "未获取到 Token"
-        case .alreadyInProgress: return "已有授权流程正在进行"
-        case .serverError(let msg): return "授权失败: \(msg)"
+        case .invalidURL: return L.zh ? "无效的授权地址" : "Invalid authorization URL"
+        case .noToken: return L.zh ? "未获取到授权凭据，请重试" : "No credentials received. Please retry."
+        case .cancelled: return L.zh ? "已取消授权" : "Authorization cancelled"
+        case .timedOut: return L.zh ? "授权等待已超时，请重新添加账号" : "Authorization timed out. Add the account again."
+        case .browserUnavailable: return L.zh ? "无法打开授权网页，请重试" : "Could not open the authorization page. Please retry."
+        case .callbackUnavailable: return L.zh ? "授权回调端口不可用，请结束其他登录流程后重试" : "Authorization callback port unavailable. Finish other sign-in flows and retry."
+        case .serverError(let message): return L.zh ? "授权失败: \(message)" : "Authorization failed: \(message)"
         }
     }
 }
 
-/// 轻量级本地 HTTP 服务器，监听 OAuth 回调
-class LocalCallbackServer {
+/// Nonblocking, main-queue socket ownership: stop releases the port synchronously.
+@MainActor
+final class LocalCallbackServer {
     private let port: UInt16
-    private var isRunning = false
-    private var handler: ((String, String) -> Void)?
-
-    init(port: UInt16) {
-        self.port = port
+    private(set) var listeningPort: UInt16 = 0
+    private var acceptTimer: Timer?
+    private var listenerFD: Int32 = -1
+    private struct Client {
+        let source: DispatchSourceRead
+        let expiration: DispatchWorkItem
+        var bytes = Data()
     }
+    private var clients: [Int32: Client] = [:]
+    private var expectedState = ""
+    private var handler: ((String) -> Void)?
 
-    func start(handler: @escaping (String, String) -> Void) {
-        self.handler = handler
-        isRunning = true
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            self?.listen()
+    init(port: UInt16) { self.port = port }
+
+    func start(expectedState: String, handler: @escaping (String) -> Void) throws {
+        stop()
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw OAuthError.callbackUnavailable }
+        var ready = false
+        defer { if !ready { close(fd) } }
+        var reuse: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
+        guard bound == 0, Darwin.listen(fd, 5) == 0,
+              fcntl(fd, F_SETFL, O_NONBLOCK) != -1 else { throw OAuthError.callbackUnavailable }
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { _ = getsockname(fd, $0, &length) }
+        }
+        listeningPort = UInt16(bigEndian: address.sin_port)
+        self.expectedState = expectedState
+        self.handler = handler
+        listenerFD = fd
+        // A nonblocking accept check exists only during browser authorization.
+        // Owning the listening descriptor directly lets cancel/restart release
+        // it synchronously, without waiting for a Dispatch source cancellation.
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.acceptClients()
+        }
+        acceptTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        ready = true
     }
 
     func stop() {
-        isRunning = false
+        acceptTimer?.invalidate()
+        acceptTimer = nil
+        if listenerFD >= 0 { close(listenerFD); listenerFD = -1 }
+        for fd in Array(clients.keys) { closeClient(fd) }
+        handler = nil
     }
 
-    private func listen() {
-        let serverFd = socket(AF_INET, SOCK_STREAM, 0)
-        guard serverFd >= 0 else { return }
-        defer { close(serverFd) }
-
-        var opt: Int32 = 1
-        setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &opt, socklen_t(MemoryLayout<Int32>.size))
-
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = port.bigEndian
-        addr.sin_addr = in_addr(s_addr: INADDR_ANY)
-        memset(&addr.sin_zero, 0, MemoryLayout.size(ofValue: addr.sin_zero))
-
-        let bindResult = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(serverFd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
-            }
-        }
-        guard bindResult == 0 else { return }
-        guard Darwin.listen(serverFd, 5) == 0 else { return }
-
-        while isRunning {
-            let clientFd = accept(serverFd, nil, nil)
-            guard clientFd >= 0 else { continue }
-
-            var buffer = [UInt8](repeating: 0, count: 4096)
-            let bytesRead = recv(clientFd, &buffer, buffer.count - 1, 0)
-            let request = bytesRead > 0 ? String(bytes: buffer.prefix(bytesRead), encoding: .utf8) ?? "" : ""
-
-            if let (code, state) = parseCallback(request) {
-                let html = """
-                <!DOCTYPE html>
-                <html lang="zh-CN">
-                <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>Completing authorization · 正在完成授权 · CodexAppBar</title>
-                <style>
-                  * { box-sizing: border-box; margin: 0; padding: 0; }
-                  body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                    background: #0d0d0d;
-                    color: #f0f0f0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 100vh;
-                  }
-                  .card {
-                    text-align: center;
-                    padding: 48px 40px;
-                    background: #1a1a1a;
-                    border: 1px solid #2a2a2a;
-                    border-radius: 20px;
-                    max-width: 380px;
-                    width: 90%;
-                    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
-                  }
-                  .logo {
-                    width: 64px;
-                    height: 64px;
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 0 auto 24px;
-                    font-size: 32px;
-                  }
-                  .check {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    width: 48px;
-                    height: 48px;
-                    background: rgba(16,185,129,0.15);
-                    border-radius: 50%;
-                    margin-bottom: 20px;
-                  }
-                  .check svg { width: 24px; height: 24px; }
-                  h1 {
-                    font-size: 20px;
-                    font-weight: 600;
-                    margin-bottom: 10px;
-                    color: #fff;
-                  }
-                  p {
-                    font-size: 14px;
-                    color: #888;
-                    line-height: 1.6;
-                  }
-                  .badge {
-                    display: inline-block;
-                    margin-top: 28px;
-                    padding: 6px 16px;
-                    background: rgba(16,185,129,0.1);
-                    border: 1px solid rgba(16,185,129,0.3);
-                    border-radius: 999px;
-                    font-size: 12px;
-                    color: #10b981;
-                    font-weight: 500;
-                    letter-spacing: 0.3px;
-                  }
-                </style>
-                </head>
-                <body>
-                <div class="card">
-                  <div class="logo">⌘</div>
-                  <div class="check">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                  </div>
-                  <h1>Authorization received · 已收到授权</h1>
-                  <p>CodexAppBar is completing token verification.<br>You can close this page and check the app.<br><br>CodexAppBar 正在完成凭据验证<br>可以关闭此页面并返回 App 查看结果</p>
-                  <div class="badge">Return to CodexAppBar · 返回 CodexAppBar</div>
-                </div>
-                </body>
-                </html>
-                """
-                let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\(html)"
-                _ = response.withCString { send(clientFd, $0, strlen($0), 0) }
-                close(clientFd)
-                isRunning = false
-                handler?(code, state)
-            } else {
-                let response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                _ = response.withCString { send(clientFd, $0, strlen($0), 0) }
-                close(clientFd)
-            }
+    private func acceptClients() {
+        guard listenerFD >= 0 else { return }
+        for _ in 0..<16 {
+            let fd = accept(listenerFD, nil, nil)
+            guard fd >= 0 else { return }
+            guard fcntl(fd, F_SETFL, O_NONBLOCK) != -1 else { close(fd); continue }
+            var noSignal: Int32 = 1
+            setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
+            let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
+            let expiration = DispatchWorkItem { [weak self] in self?.closeClient(fd) }
+            clients[fd] = Client(source: source, expiration: expiration)
+            source.setEventHandler { [weak self] in self?.readClient(fd) }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: expiration)
         }
     }
 
-    private func parseCallback(_ request: String) -> (String, String)? {
-        // 解析 GET /auth/callback?code=xxx&state=yyy HTTP/1.1
-        guard let line = request.components(separatedBy: "\r\n").first,
-              line.hasPrefix("GET ") else { return nil }
-        let parts = line.components(separatedBy: " ")
-        guard parts.count >= 2 else { return nil }
-        let path = parts[1]
-        guard let urlComponents = URLComponents(string: "http://localhost" + path),
-              let code = urlComponents.queryItems?.first(where: { $0.name == "code" })?.value,
-              let state = urlComponents.queryItems?.first(where: { $0.name == "state" })?.value else { return nil }
-        return (code, state)
+    private func closeClient(_ fd: Int32) {
+        guard let client = clients.removeValue(forKey: fd) else { return }
+        client.expiration.cancel()
+        client.source.cancel()
+        shutdown(fd, SHUT_RDWR)
+    }
+
+    private func readClient(_ fd: Int32) {
+        guard clients[fd] != nil else { return }
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        let count = recv(fd, &buffer, buffer.count, 0)
+        guard count > 0 else {
+            if count == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) { closeClient(fd) }
+            return
+        }
+        clients[fd]?.bytes.append(contentsOf: buffer.prefix(count))
+        guard let bytes = clients[fd]?.bytes else { return }
+        guard bytes.count <= 16384 else { closeClient(fd); return }
+        guard let request = String(data: bytes, encoding: .utf8), request.contains("\r\n\r\n") else { return }
+        let path = request.components(separatedBy: "\r\n")[0].components(separatedBy: " ")
+        guard path.count >= 2, path[0] == "GET",
+              let url = URLComponents(string: "http://localhost" + path[1]), url.path == "/auth/callback",
+              url.queryItems?.first(where: { $0.name == "state" })?.value == expectedState,
+              let code = url.queryItems?.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
+            respond(fd, status: "400 Bad Request", body: "This authorization link is no longer valid. Return to CodexAppBar and use the latest page.")
+            return
+        }
+        let html = OAuthCallbackPage.html(chinese: L.zh)
+        respond(fd, status: "200 OK", body: html)
+        // Only the expected state consumes the one-shot callback. Stale browser
+        // pages cannot stop the current listener or fail a replacement flow.
+        let completion = handler
+        stop()
+        completion?(code)
+    }
+
+    private func respond(_ fd: Int32, status: String, body: String) {
+        let response = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
+        _ = response.withCString { send(fd, $0, strlen($0), 0) }
+        closeClient(fd)
     }
 }

@@ -10,6 +10,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.codexbar.oauth</string>
+				<string>codexappbar</string>
 			</array>
 		</dict>
 	</array>
