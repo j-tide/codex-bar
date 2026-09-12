@@ -203,9 +203,9 @@ Options:
   2. 读取上一个 GitHub Release tag，并用 git log 生成中文 release notes
   3. xcodebuild clean archive
   4. 对 .app 做 ad-hoc 签名并验证
-  5. 生成干净 zip（无 ._* / .DS_Store）
+  5. 生成干净 ZIP 和含 Applications 快捷方式的 DMG，并校验完整性
   6. 创建 annotated tag、推送 main/tag、创建 GitHub Release
-  7. 校验上传 asset，并更新 dist/.last_tag 与 dist/.last_asset
+  7. 校验两个上传产物的 SHA-256，并更新 dist/.last_tag、.last_asset 和 .last_assets
 
 正常发布时会隐藏底层命令日志，只显示当前步骤和加载动画；失败时会打印对应日志尾部。
 EOF
@@ -355,6 +355,8 @@ release_notes_from_git() {
   local public_version="$4"
   local bundle_version="$5"
   local sha256="$6"
+  local dmg_name="$7"
+  local dmg_sha256="$8"
   local changelog
 
   if [[ -n "$range" ]]; then
@@ -382,6 +384,8 @@ release_notes_from_git() {
     echo "- 构建号：${bundle_version}"
     echo "- 发布产物：${asset_name}"
     echo "- SHA-256：${sha256}"
+    echo "- DMG 安装包：${dmg_name}（打开后拖入 Applications）"
+    echo "- SHA-256：${dmg_sha256}"
   }
 }
 
@@ -389,6 +393,7 @@ require_cmd git
 require_cmd gh
 require_cmd xcodebuild
 require_cmd codesign
+require_cmd hdiutil
 require_cmd ditto
 require_cmd unzip
 require_cmd shasum
@@ -463,6 +468,8 @@ marketing_version="${release_year}.${release_month}.${release_day}"
 public_version="$TAG"
 asset_name="codexAppBar-${public_version}-release.zip"
 asset_path="dist/${asset_name}"
+dmg_name="codexAppBar-${public_version}-release.dmg"
+dmg_path="dist/${dmg_name}"
 app_path="${ARCHIVE_PATH}/${APP_RELATIVE_PATH}"
 
 print_box "Release target" "Repo:   $REPO
@@ -472,7 +479,8 @@ Range:  ${release_range:-<all commits>}
 Version: $public_version
 Marketing: $marketing_version
 Build:  $bundle_version
-Asset:  $asset_path"
+ZIP:    $asset_path
+DMG:    $dmg_path"
 
 confirm "确认开始构建并发布 ${TAG}？" || {
   cancel_release
@@ -509,8 +517,13 @@ if [[ "$DRY_RUN" != 1 ]]; then
   fi
 fi
 
+run_progress "ZIP 完整性校验中" "ZIP 校验完成" unzip -t "$asset_path"
+run_progress "DMG 打包及校验中" "DMG 打包及校验完成" bash scripts/package-dmg.sh "$app_path" "$dmg_path" "CodexAppBar $public_version"
+
 sha256="dry-run"
+dmg_sha256="dry-run"
 if [[ "$DRY_RUN" != 1 ]]; then
+  dmg_sha256="$(shasum -a 256 "$dmg_path" | awk '{print $1}')"
   sha256="$(shasum -a 256 "$asset_path" | awk '{print $1}')"
 fi
 
@@ -519,7 +532,7 @@ TEMP_FILES+=("$notes_tmp")
 if [[ -n "$NOTES_FILE" ]]; then
   cp "$NOTES_FILE" "$notes_tmp"
 else
-  release_notes_from_git "$last_release_tag" "$release_range" "$asset_name" "$public_version" "$bundle_version" "$sha256" > "$notes_tmp"
+  release_notes_from_git "$last_release_tag" "$release_range" "$asset_name" "$public_version" "$bundle_version" "$sha256" "$dmg_name" "$dmg_sha256" > "$notes_tmp"
 fi
 
 echo
@@ -535,7 +548,7 @@ run_progress "创建 tag 中" "tag 已创建" git tag -a "$TAG" -m "CodexAppBar 
 run_progress "推送 main 中" "main 已推送" git push origin "$current_branch"
 run_progress "推送 tag 中" "tag 已推送" git push origin "$TAG"
 
-run_progress "发布 GitHub Release 中" "GitHub Release 已发布" gh release create "$TAG" "$asset_path" \
+run_progress "发布 GitHub Release 中" "GitHub Release 已发布" gh release create "$TAG" "$asset_path" "$dmg_path" \
   --repo "$REPO" \
   --title "CodexAppBar $TAG" \
   --notes-file "$notes_tmp" \
@@ -544,11 +557,15 @@ run_progress "发布 GitHub Release 中" "GitHub Release 已发布" gh release c
 release_url=""
 asset_url=""
 if [[ "$DRY_RUN" != 1 ]]; then
-  remote_digest="$(gh release view "$TAG" --repo "$REPO" --json assets --jq ".assets[] | select(.name == \"${asset_name}\") | .digest" 2>/dev/null || true)"
-  if [[ -n "$remote_digest" && "$remote_digest" != "sha256:${sha256}" ]]; then
-    echo "远端 asset SHA 不一致：${remote_digest} != sha256:${sha256}" >&2
-    exit 1
-  fi
+  for package in "$asset_path" "$dmg_path"; do
+    package_name="${package##*/}"
+    expected_digest="sha256:$(shasum -a 256 "$package" | awk '{print $1}')"
+    remote_digest="$(gh release view "$TAG" --repo "$REPO" --json assets --jq ".assets[] | select(.name == \"${package_name}\") | .digest")"
+    if [[ "$remote_digest" != "$expected_digest" ]]; then
+      echo "远端 ${package_name} SHA 缺失或不一致：${remote_digest} != ${expected_digest}" >&2
+      exit 1
+    fi
+  done
   release_url="$(gh release view "$TAG" --repo "$REPO" --json url --jq '.url' 2>/dev/null || true)"
   asset_url="$(gh release view "$TAG" --repo "$REPO" --json assets --jq ".assets[] | select(.name == \"${asset_name}\") | .url" 2>/dev/null || true)"
 fi
@@ -557,6 +574,7 @@ run_progress "同步本地标签中" "本地标签已同步" git fetch --tags --
 if [[ "$DRY_RUN" != 1 ]]; then
   printf '%s\n' "$TAG" > dist/.last_tag
   printf '%s\n' "$asset_name" > dist/.last_asset
+  printf '%s\n' "$asset_name" "$dmg_name" > dist/.last_assets
 fi
 
 echo
@@ -569,3 +587,5 @@ if [[ -n "${asset_url:-}" ]]; then
 fi
 echo "产物：${asset_path}"
 echo "SHA-256：${sha256}"
+echo "DMG：${dmg_path}"
+echo "DMG SHA-256：${dmg_sha256}"
