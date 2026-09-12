@@ -76,6 +76,7 @@ final class TaskActivityRepository {
     private let now: () -> Date
     private let monitorFactory: MonitorFactory
     private let decoder = JSONDecoder()
+    private var decodedRecords: [URL: (data: Data, record: TaskActivityRecord)] = [:]
 
     private var monitor: TaskActivityDirectoryMonitoring?
     private var debounceWorkItem: DispatchWorkItem?
@@ -169,19 +170,29 @@ final class TaskActivityRepository {
         secureRuntimeDirectories()
 
         var recordsByTask: [String: TaskActivityRecord] = [:]
-        for fileURL in sessionJSONFiles() {
+        let files = sessionJSONFiles()
+        let liveFiles = Set(files)
+        decodedRecords = decodedRecords.filter { liveFiles.contains($0.key) }
+        for fileURL in files {
             do {
                 let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
                 guard fileSize <= Self.maximumRecordBytes else {
                     throw TaskActivityRepositoryError.invalidRecord
                 }
                 let data = try Data(contentsOf: fileURL)
-                let decodedRecord = try decoder.decode(TaskActivityRecord.self, from: data)
-                let record = normalizeLegacyPermissionAttention(decodedRecord)
+                let decodedRecord: TaskActivityRecord
+                if let cached = decodedRecords[fileURL], cached.data == data {
+                    decodedRecord = cached.record
+                } else {
+                    decodedRecord = try decoder.decode(TaskActivityRecord.self, from: data)
+                    decodedRecords[fileURL] = (data, decodedRecord)
+                }
+                let record = normalizeLegacyHookState(decodedRecord)
                 try validate(record, fileURL: fileURL, at: currentDate)
 
                 if currentDate.timeIntervalSince(record.updatedAt) >= Self.retentionInterval {
                     try? fileManager.removeItem(at: fileURL)
+                    decodedRecords[fileURL] = nil
                     continue
                 }
 
@@ -190,6 +201,7 @@ final class TaskActivityRepository {
                 }
                 recordsByTask[record.taskKey] = record
             } catch {
+                decodedRecords[fileURL] = nil
                 if !quarantine(fileURL, at: currentDate) {
                     unreadableDuringLoad += 1
                 }
@@ -318,9 +330,10 @@ final class TaskActivityRepository {
         }
     }
 
-    private func normalizeLegacyPermissionAttention(_ record: TaskActivityRecord) -> TaskActivityRecord {
-        guard record.state == .needsAttention,
-              record.source == "PermissionRequest" else { return record }
+    private func normalizeLegacyHookState(_ record: TaskActivityRecord) -> TaskActivityRecord {
+        let provisionalPermission = record.state == .needsAttention && record.source == "PermissionRequest"
+        let completedCompaction = record.phase == .compacting && record.source.hasPrefix("SessionStart")
+        guard provisionalPermission || completedCompaction else { return record }
 
         // Older CodexAppBar releases persisted PermissionRequest as though the
         // approval prompt had reached the user. Codex can auto-approve after
@@ -415,7 +428,7 @@ final class TaskActivityRepository {
         case .needsAttention:
             return .awaitingPermission
         case .running:
-            return source?.lowercased().contains("compact") == true ? .compacting : .processing
+            return source?.hasPrefix("PreCompact") == true ? .compacting : .processing
         case .ready:
             return source?.hasPrefix("SessionStart") == true ? .connecting : .waitingInput
         }

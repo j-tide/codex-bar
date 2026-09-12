@@ -1,11 +1,12 @@
 import CryptoKit
 import Combine
 import Foundation
+import OSLog
 import UserNotifications
 
 protocol TaskNotificationClient: AnyObject {
     func authorizationStatus(completion: @escaping (UNAuthorizationStatus) -> Void)
-    func requestAuthorization(completion: @escaping (Bool) -> Void)
+    func requestAuthorization(completion: @escaping (Result<Bool, Error>) -> Void)
     func add(_ request: UNNotificationRequest, completion: @escaping (Error?) -> Void)
     func setResponseHandler(_ handler: @escaping () -> Void)
 }
@@ -25,9 +26,10 @@ final class SystemTaskNotificationClient: NSObject, TaskNotificationClient, UNUs
         }
     }
 
-    func requestAuthorization(completion: @escaping (Bool) -> Void) {
-        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            completion(granted)
+    func requestAuthorization(completion: @escaping (Result<Bool, Error>) -> Void) {
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error { completion(.failure(error)) }
+            else { completion(.success(granted)) }
         }
     }
 
@@ -68,12 +70,23 @@ final class SystemTaskNotificationClient: NSObject, TaskNotificationClient, UNUs
     static let identifierPrefix = "codexbar-task-attention-"
 }
 
+enum TaskNotificationAuthorizationIssue: Equatable {
+    case denied
+    case requestFailed(String)
+    case notDetermined
+}
+
 @MainActor
 final class TaskNotificationService: ObservableObject {
     static let shared = TaskNotificationService()
 
     @Published private(set) var isEnabled: Bool
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+
+    @Published private(set) var isUpdatingAuthorization = false
+    private var authorizationRevision = 0
+
+    @Published private(set) var authorizationIssue: TaskNotificationAuthorizationIssue?
 
     var onOpenCodex: (() -> Void)?
 
@@ -85,6 +98,8 @@ final class TaskNotificationService: ObservableObject {
     private let notificationClient: TaskNotificationClient
     private let defaults: UserDefaults
     private let attentionDelayNanoseconds: UInt64
+    private let retryDelayNanoseconds: UInt64
+    private var deliveryAttempts: [String: Int] = [:]
     private var notifiedEventKeys: [String]
     private var notifiedEventKeySet: Set<String>
     private var latestSnapshot: TaskCenterSnapshot?
@@ -101,11 +116,13 @@ final class TaskNotificationService: ObservableObject {
     init(
         notificationClient: TaskNotificationClient,
         defaults: UserDefaults,
-        attentionDelayNanoseconds: UInt64 = 0
+        attentionDelayNanoseconds: UInt64 = 0,
+        retryDelayNanoseconds: UInt64 = 2_000_000_000
     ) {
         self.notificationClient = notificationClient
         self.defaults = defaults
         self.attentionDelayNanoseconds = attentionDelayNanoseconds
+        self.retryDelayNanoseconds = retryDelayNanoseconds
         let savedKeys = defaults.stringArray(forKey: Self.notifiedEventKeysDefaultsKey) ?? []
         notifiedEventKeys = savedKeys
         notifiedEventKeySet = Set(savedKeys)
@@ -121,35 +138,102 @@ final class TaskNotificationService: ObservableObject {
     }
 
     func refreshAuthorizationStatus() {
+        guard !isUpdatingAuthorization else { return }
+        authorizationRevision += 1
+        let revision = authorizationRevision
         notificationClient.authorizationStatus { [weak self] status in
             Task { @MainActor in
-                self?.applyAuthorizationStatus(status)
+                guard let self, !self.isUpdatingAuthorization,
+                      self.authorizationRevision == revision else { return }
+                self.applyAuthorizationStatus(status)
             }
         }
+    }
+
+    func refreshAuthorizationStatusNow() async {
+        guard !isUpdatingAuthorization else { return }
+        authorizationRevision += 1
+        let revision = authorizationRevision
+        let status = await currentAuthorizationStatus()
+        guard !isUpdatingAuthorization, authorizationRevision == revision else { return }
+        applyAuthorizationStatus(status)
+    }
+
+    /// Decide from current system permission, never from the icon's cached state.
+    @discardableResult
+    func toggleFromUserAction() async -> Bool {
+        guard !isUpdatingAuthorization else { return isEnabled }
+        isUpdatingAuthorization = true
+        authorizationRevision += 1
+        defer { isUpdatingAuthorization = false }
+        let status = await currentAuthorizationStatus()
+        applyAuthorizationStatus(status)
+        if isEnabled {
+            disable()
+            return false
+        }
+        return await enable(afterChecking: status)
     }
 
     @discardableResult
     func enable() async -> Bool {
+        guard !isUpdatingAuthorization else { return isEnabled }
+        isUpdatingAuthorization = true
+        authorizationRevision += 1
+        defer { isUpdatingAuthorization = false }
+        let status = await currentAuthorizationStatus()
+        return await enable(afterChecking: status)
+    }
+
+    private func enable(afterChecking initialStatus: UNAuthorizationStatus) async -> Bool {
+        authorizationIssue = nil
         defaults.set(true, forKey: Self.enabledDefaultsKey)
-        let granted = await withCheckedContinuation { continuation in
-            notificationClient.requestAuthorization { granted in
-                continuation.resume(returning: granted)
+        applyAuthorizationStatus(initialStatus)
+        if Self.isAuthorized(initialStatus) { return true }
+        if initialStatus == .denied {
+            authorizationIssue = .denied
+            return false
+        }
+        let result: Result<Bool, Error> = await withCheckedContinuation { continuation in
+            notificationClient.requestAuthorization { result in
+                continuation.resume(returning: result)
             }
         }
         let status = await currentAuthorizationStatus()
         applyAuthorizationStatus(status)
-        return granted && Self.isAuthorized(status)
+        switch result {
+        case .failure(let error):
+            let error = error as NSError
+            let detail = "\(error.localizedDescription) (\(error.domain) \(error.code))"
+            authorizationIssue = .requestFailed(detail)
+            Logger(subsystem: Bundle.main.bundleIdentifier ?? "codexbar", category: "TaskNotifications")
+                .error("Notification authorization failed: \(detail, privacy: .public)")
+            return false
+        case .success(let granted):
+            if granted, status == .notDetermined {
+                // The grant callback can arrive before getNotificationSettings catches up.
+                applyAuthorizationStatus(.authorized)
+            }
+            if isEnabled { return true }
+            authorizationIssue = status == .denied ? .denied : .notDetermined
+            return false
+        }
     }
 
     func disable() {
+        authorizationRevision += 1
         defaults.set(false, forKey: Self.enabledDefaultsKey)
         isEnabled = false
+        authorizationIssue = nil
         cancelAllPendingNotifications()
+        deliveryAttempts.removeAll()
     }
 
     func process(snapshot: TaskCenterSnapshot) {
         latestSnapshot = snapshot
-        let activeDedupeKeys = Set(snapshot.needsAttentionRecords.map { Self.digest($0.eventKey) })
+        let candidates = Self.notificationRecords(in: snapshot)
+        let activeDedupeKeys = Set(candidates.map { Self.digest($0.eventKey) })
+        deliveryAttempts = deliveryAttempts.filter { activeDedupeKeys.contains($0.key) }
         for (dedupeKey, task) in pendingNotificationTasks where !activeDedupeKeys.contains(dedupeKey) {
             task.cancel()
             pendingNotificationTasks.removeValue(forKey: dedupeKey)
@@ -160,12 +244,15 @@ final class TaskNotificationService: ObservableObject {
             return
         }
 
-        for record in snapshot.needsAttentionRecords {
+        for record in candidates {
             let dedupeKey = Self.digest(record.eventKey)
             guard !notifiedEventKeySet.contains(dedupeKey),
+                  deliveryAttempts[dedupeKey, default: 0] < 3,
                   pendingNotificationTasks[dedupeKey] == nil else { continue }
 
-            if attentionDelayNanoseconds == 0 {
+            // Only attention candidates need the auto-approval grace period.
+            // The task center has already filtered read/unknown completions.
+            if record.state == .ready || attentionDelayNanoseconds == 0 {
                 sendNotification(for: record, dedupeKey: dedupeKey)
                 continue
             }
@@ -181,9 +268,7 @@ final class TaskNotificationService: ObservableObject {
                 self.pendingNotificationTasks.removeValue(forKey: dedupeKey)
                 guard self.isEnabled,
                       !self.notifiedEventKeySet.contains(dedupeKey),
-                      self.latestSnapshot?.needsAttentionRecords.contains(where: {
-                          Self.digest($0.eventKey) == dedupeKey
-                      }) == true else { return }
+                      self.isCurrentNotification(dedupeKey) else { return }
                 self.sendNotification(for: record, dedupeKey: dedupeKey)
             }
         }
@@ -194,8 +279,49 @@ final class TaskNotificationService: ObservableObject {
         // This provides at-most-once scheduling even if the app exits
         // between system acceptance and the completion callback.
         remember(dedupeKey)
+        deliveryAttempts[dedupeKey, default: 0] += 1
         let request = notificationRequest(for: record, dedupeKey: dedupeKey)
-        notificationClient.add(request) { _ in }
+        notificationClient.add(request) { [weak self] error in
+            Task { @MainActor in
+                guard let self else { return }
+                let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "codexbar", category: "TaskNotifications")
+                guard let error else {
+                    self.deliveryAttempts.removeValue(forKey: dedupeKey)
+                    logger.notice("Notification accepted: state=\(record.state.rawValue, privacy: .public)")
+                    return
+                }
+                // A definite rejection is not a delivered notification. Keep
+                // successful/in-flight dedupe persistent, but allow failures to retry.
+                self.forget(dedupeKey)
+                logger.error("Notification rejected: \(error.localizedDescription, privacy: .public)")
+                let attempts = self.deliveryAttempts[dedupeKey, default: 0]
+                guard self.isEnabled, attempts < 3, self.isCurrentNotification(dedupeKey) else { return }
+                let delay = self.retryDelayNanoseconds * UInt64(max(1, attempts))
+                self.pendingNotificationTasks[dedupeKey] = Task { @MainActor [weak self] in
+                    do { try await Task.sleep(nanoseconds: delay) } catch { return }
+                    guard let self else { return }
+                    self.pendingNotificationTasks.removeValue(forKey: dedupeKey)
+                    guard self.isEnabled, self.isCurrentNotification(dedupeKey),
+                          !self.notifiedEventKeySet.contains(dedupeKey) else { return }
+                    self.sendNotification(for: record, dedupeKey: dedupeKey)
+                }
+            }
+        }
+    }
+
+    private static func notificationRecords(in snapshot: TaskCenterSnapshot) -> [TaskActivityRecord] {
+        snapshot.needsAttentionRecords + snapshot.readyRecords.filter { $0.source == "Stop" }
+    }
+
+    private func isCurrentNotification(_ dedupeKey: String) -> Bool {
+        guard let latestSnapshot else { return false }
+        return Self.notificationRecords(in: latestSnapshot).contains { Self.digest($0.eventKey) == dedupeKey }
+    }
+
+    private func forget(_ key: String) {
+        notifiedEventKeySet.remove(key)
+        notifiedEventKeys.removeAll { $0 == key }
+        defaults.set(notifiedEventKeys, forKey: Self.notifiedEventKeysDefaultsKey)
     }
 
     private func cancelAllPendingNotifications() {
@@ -215,18 +341,23 @@ final class TaskNotificationService: ObservableObject {
         let wasEnabled = isEnabled
         authorizationStatus = status
         isEnabled = defaults.bool(forKey: Self.enabledDefaultsKey) && Self.isAuthorized(status)
+        if Self.isAuthorized(status) { authorizationIssue = nil }
+        else if status == .denied, defaults.bool(forKey: Self.enabledDefaultsKey) {
+            authorizationIssue = .denied
+        }
         if !isEnabled {
             cancelAllPendingNotifications()
         }
         if !wasEnabled, isEnabled, let latestSnapshot {
+            deliveryAttempts.removeAll()
             process(snapshot: latestSnapshot)
         }
     }
 
     private func notificationRequest(for record: TaskActivityRecord, dedupeKey: String) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
-        content.title = L.taskAttentionNotificationTitle
-        content.body = L.taskAttentionNotificationBody
+        content.title = record.state == .ready ? L.taskCompletedNotificationTitle : L.taskAttentionNotificationTitle
+        content.body = record.state == .ready ? L.taskCompletedNotificationBody : L.taskAttentionNotificationBody
         content.sound = .default
         return UNNotificationRequest(
             identifier: SystemTaskNotificationClient.identifierPrefix + dedupeKey,

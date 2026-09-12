@@ -7,6 +7,35 @@ import XCTest
 final class TaskCenterCoreTests: XCTestCase {
     private let fixedNow = Date(timeIntervalSince1970: 2_000_000_000)
 
+    func testCachedRecordDetectsReplacementEvenWithUnchangedModificationDate() throws {
+        let fixture = try Fixture(now: fixedNow)
+        defer { fixture.remove() }
+        let running = record(key: "cached", state: .running, phase: .processing, age: 0)
+        let file = try fixture.write(running)
+        let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+        XCTAssertEqual(fixture.repository.load().records, [running])
+        XCTAssertEqual(fixture.repository.load().records, [running])
+        let completed = record(key: "cached", state: .ready, phase: .waitingInput, age: 0)
+        try fixture.write(completed)
+        try FileManager.default.setAttributes([.modificationDate: attributes[.modificationDate]!], ofItemAtPath: file.path)
+        XCTAssertEqual(fixture.repository.load().records, [completed])
+        try Data("invalid JSON".utf8).write(to: file)
+        XCTAssertTrue(fixture.repository.load().records.isEmpty, "Cached valid data must not mask a corrupt replacement")
+    }
+
+    func testCachedRecordsStillExpireWithoutFileChanges() throws {
+        let fixture = try Fixture(now: fixedNow)
+        defer { fixture.remove() }
+        var clock = fixedNow
+        let repository = TaskActivityRepository(sessionsURL: fixture.sessionsURL,
+            legacyStatusURL: fixture.legacyURL, now: { clock })
+        let file = try fixture.write(record(key: "cached", state: .ready, phase: .waitingInput, age: 0))
+        XCTAssertEqual(repository.load().records.count, 1)
+        clock = clock.addingTimeInterval(25 * 60 * 60)
+        XCTAssertTrue(repository.load().records.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
+
     func testSnapshotAggregatesByPriorityAndExcludesStaleRunningTasks() {
         let ready = record(key: "ready", state: .ready, phase: .waitingInput, age: 30)
         let running = record(key: "running", state: .running, phase: .processing, age: 60)
@@ -22,6 +51,33 @@ final class TaskCenterCoreTests: XCTestCase {
         XCTAssertEqual(snapshot.readyCount, 1)
         XCTAssertEqual(snapshot.staleRecords.map(\.taskKey), ["stale"])
         XCTAssertEqual(snapshot.records.map(\.taskKey), ["attention", "running", "ready", "stale"])
+    }
+
+    func testDisplayedTasksHideStaleRecordsAndReturnAfterFreshActivity() throws {
+        let fixture = try Fixture(now: fixedNow)
+        defer { fixture.remove() }
+        let defaultsFixture = try DefaultsFixture()
+        defer { defaultsFixture.remove() }
+        let notifications = TaskNotificationService(
+            notificationClient: MockTaskNotificationClient(status: .authorized, requestGranted: true),
+            defaults: defaultsFixture.defaults)
+        let service = TaskCenterService(repository: fixture.repository,
+            notificationService: notifications, now: { self.fixedNow })
+        defer { service.stop() }
+        try fixture.write(record(key: "stale", state: .running, phase: .processing, age: 7 * 60 * 60))
+        service.refresh()
+        XCTAssertTrue(service.displayRecords.isEmpty)
+        XCTAssertEqual(service.snapshot.staleRecords.count, 1)
+
+        try fixture.write(record(key: "unread", state: .ready, phase: .waitingInput, age: 10))
+        service.refresh()
+        XCTAssertEqual(service.displayRecords.map(\.taskKey), ["unread"])
+        XCTAssertEqual(service.snapshot.readyCount, 1)
+
+        try fixture.write(record(key: "stale", state: .running, phase: .processing, age: 0))
+        service.refresh()
+        XCTAssertEqual(service.displayRecords.map(\.taskKey), ["stale", "unread"])
+        XCTAssertTrue(service.snapshot.staleRecords.isEmpty)
     }
 
     func testRepositoryLoadsV2RecordsInsteadOfLegacyAndSecuresItsDirectories() throws {
@@ -118,7 +174,7 @@ final class TaskCenterCoreTests: XCTestCase {
         XCTAssertTrue(result.isLegacyFallback)
         XCTAssertEqual(result.records.count, 1)
         XCTAssertEqual(result.records.first?.taskKey, TaskActivityRepository.legacyTaskKey)
-        XCTAssertEqual(result.records.first?.phase, .compacting)
+        XCTAssertEqual(result.records.first?.phase, .processing)
         XCTAssertEqual(result.records.first?.projectName, "Codex")
     }
 
@@ -243,7 +299,7 @@ final class TaskCenterCoreTests: XCTestCase {
         await Task.yield()
 
         let request = try XCTUnwrap(client.requests.first)
-        XCTAssertEqual(client.authorizationRequestCount, 1)
+        XCTAssertEqual(client.authorizationRequestCount, 0)
         XCTAssertEqual(client.requests.count, 1)
         XCTAssertFalse(request.content.title.contains("Secret"))
         XCTAssertFalse(request.content.body.contains("Secret"))
@@ -345,11 +401,8 @@ final class TaskCenterCoreTests: XCTestCase {
             now: fixedNow
         )
 
-        let firstClient = MockTaskNotificationClient(
-            status: .authorized,
-            requestGranted: true,
-            addError: CocoaError(.fileWriteUnknown)
-        )
+        let firstClient = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        firstClient.delaysAddResponses = true
         let first = TaskNotificationService(notificationClient: firstClient, defaults: defaultsFixture.defaults)
         let enabled = await first.enable()
         XCTAssertTrue(enabled)
@@ -363,6 +416,104 @@ final class TaskCenterCoreTests: XCTestCase {
         second.process(snapshot: snapshot)
 
         XCTAssertTrue(secondClient.requests.isEmpty)
+        firstClient.pendingAddCallbacks.first?(nil)
+    }
+
+    func testUnreadStopCompletionNotifiesImmediatelyAndOnlyOnce() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults,
+            attentionDelayNanoseconds: 15_000_000_000)
+        let enabled = await service.enable()
+        XCTAssertTrue(enabled)
+        let completed = record(key: "completed", state: .ready, phase: .waitingInput, age: 0)
+        let snapshot = TaskCenterSnapshot(records: [completed], now: fixedNow)
+        service.process(snapshot: snapshot)
+        service.process(snapshot: snapshot)
+        XCTAssertEqual(client.requests.count, 1, "Completions must not wait for the approval grace period")
+        XCTAssertEqual(client.requests.first?.content.title, L.taskCompletedNotificationTitle)
+        XCTAssertEqual(client.requests.first?.content.body, L.taskCompletedNotificationBody)
+        service.process(snapshot: .empty)
+        service.process(snapshot: snapshot)
+        XCTAssertEqual(client.requests.count, 1)
+    }
+
+    func testResumeAndInterruptAreNotCompletionNotifications() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults)
+        _ = await service.enable()
+        for source in ["SessionStart", "Interrupt", "SessionEnd"] {
+            service.process(snapshot: TaskCenterSnapshot(records: [
+                record(key: source, state: .ready, phase: .waitingInput, age: 0, source: source)
+            ], now: fixedNow))
+        }
+        XCTAssertTrue(client.requests.isEmpty)
+    }
+
+    func testRejectedNotificationRetriesAndThenPersistsSuccessfulDedupe() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true,
+            addError: CocoaError(.fileWriteUnknown))
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults,
+            retryDelayNanoseconds: 50_000_000)
+        _ = await service.enable()
+        let snapshot = TaskCenterSnapshot(records: [record(key: "retry", state: .ready, phase: .waitingInput, age: 0)], now: fixedNow)
+        service.process(snapshot: snapshot)
+        try await Task.sleep(for: .milliseconds(20))
+        client.addError = nil
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(client.requests.count, 2)
+        let secondClient = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let restarted = TaskNotificationService(notificationClient: secondClient, defaults: fixture.defaults)
+        await restarted.refreshAuthorizationStatusNow()
+        restarted.process(snapshot: snapshot)
+        XCTAssertTrue(secondClient.requests.isEmpty)
+    }
+
+    func testReadCompletionCancelsDeliveryRetry() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true,
+            addError: CocoaError(.fileWriteUnknown))
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults,
+            retryDelayNanoseconds: 50_000_000)
+        _ = await service.enable()
+        service.process(snapshot: TaskCenterSnapshot(records: [record(key: "read", state: .ready, phase: .waitingInput, age: 0)], now: fixedNow))
+        try await Task.sleep(for: .milliseconds(20))
+        service.process(snapshot: .empty)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(client.requests.count, 1)
+    }
+
+    func testRepeatedDeliveryFailuresStopAfterThreeAttempts() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true,
+            addError: CocoaError(.fileWriteUnknown))
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults,
+            retryDelayNanoseconds: 10_000_000)
+        _ = await service.enable()
+        let snapshot = TaskCenterSnapshot(records: [record(key: "failed", state: .ready, phase: .waitingInput, age: 0)], now: fixedNow)
+        service.process(snapshot: snapshot)
+        try await Task.sleep(for: .milliseconds(150))
+        service.process(snapshot: snapshot)
+        XCTAssertEqual(client.requests.count, 3)
+    }
+
+    func testEnableProactivelyRequestsNotificationAuthorization() async throws {
+        let defaultsFixture = try DefaultsFixture()
+        defer { defaultsFixture.remove() }
+        let client = MockTaskNotificationClient(status: .notDetermined, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: defaultsFixture.defaults)
+        XCTAssertEqual(client.authorizationRequestCount, 0)
+        let enabled = await service.enable()
+        XCTAssertTrue(enabled)
+        XCTAssertEqual(client.authorizationRequestCount, 1)
+        XCTAssertEqual(service.authorizationStatus, .authorized)
     }
 
     func testDeniedNotificationPermissionDoesNotEnableService() async throws {
@@ -375,6 +526,88 @@ final class TaskCenterCoreTests: XCTestCase {
         XCTAssertFalse(enabled)
         XCTAssertFalse(service.isEnabled)
         XCTAssertEqual(service.authorizationStatus, .denied)
+        XCTAssertEqual(service.authorizationIssue, .denied)
+        XCTAssertEqual(client.authorizationRequestCount, 0)
+    }
+
+    func testAuthorizationFailureIsNotReportedAsDenialAndCanRetry() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .notDetermined, requestGranted: true)
+        client.authorizationError = NSError(domain: "PermissionTransport", code: 42)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults)
+        let enabled = await service.enable()
+        XCTAssertFalse(enabled)
+        guard case .requestFailed(let detail) = service.authorizationIssue else {
+            return XCTFail("A system request error must not become permission denial")
+        }
+        XCTAssertTrue(detail.contains("PermissionTransport 42"))
+        client.authorizationError = nil
+        let retried = await service.enable()
+        XCTAssertTrue(retried)
+        XCTAssertNil(service.authorizationIssue)
+        XCTAssertEqual(client.authorizationRequestCount, 2)
+        service.disable()
+        let reenabled = await service.enable()
+        XCTAssertTrue(reenabled)
+        XCTAssertEqual(client.authorizationRequestCount, 2, "Existing permission needs no new system prompt")
+    }
+
+    func testSystemRevocationIsRecheckedBeforeToggleAndRestoresAfterSettingsGrant() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults)
+        let enabled = await service.enable()
+        XCTAssertTrue(enabled)
+        client.status = .denied // System Settings changed while our icon was still cached as enabled.
+        let toggled = await service.toggleFromUserAction()
+        XCTAssertFalse(toggled)
+        XCTAssertEqual(service.authorizationIssue, .denied)
+        XCTAssertEqual(client.authorizationRequestCount, 0)
+        client.status = .authorized
+        await service.refreshAuthorizationStatusNow()
+        XCTAssertTrue(service.isEnabled, "Blocked click must preserve the intent to enable")
+        XCTAssertNil(service.authorizationIssue)
+        let disabled = await service.toggleFromUserAction()
+        XCTAssertFalse(disabled)
+        await service.refreshAuthorizationStatusNow()
+        XCTAssertFalse(service.isEnabled, "Refresh must preserve an explicit app-level off setting")
+    }
+
+    func testOlderPermissionRefreshCannotOverwriteSystemRevocation() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults)
+        _ = await service.enable()
+        client.delaysStatusResponses = true
+        service.refreshAuthorizationStatus()
+        service.refreshAuthorizationStatus()
+        XCTAssertEqual(client.pendingStatusCallbacks.count, 2)
+        client.pendingStatusCallbacks[1](.denied)
+        await Task.yield()
+        client.pendingStatusCallbacks[0](.authorized)
+        await Task.yield()
+        XCTAssertFalse(service.isEnabled)
+        XCTAssertEqual(service.authorizationStatus, .denied)
+    }
+
+    func testOverlappingNotificationTapsDoNotToggleTwice() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults)
+        client.delaysStatusResponses = true
+        let first = Task { await service.toggleFromUserAction() }
+        await Task.yield()
+        XCTAssertTrue(service.isUpdatingAuthorization)
+        _ = await service.toggleFromUserAction()
+        XCTAssertEqual(client.pendingStatusCallbacks.count, 1)
+        client.pendingStatusCallbacks[0](.authorized)
+        let enabled = await first.value
+        XCTAssertTrue(enabled)
+        XCTAssertFalse(service.isUpdatingAuthorization)
     }
 
     func testDistinctPermissionEventsForOneTaskEachNotifyOnce() async throws {
@@ -591,8 +824,13 @@ private final class MockTaskNotificationClient: TaskNotificationClient {
     var status: UNAuthorizationStatus
     var requestGranted: Bool
     var authorizationRequestCount = 0
+    var authorizationError: Error?
+    var delaysStatusResponses = false
+    var pendingStatusCallbacks: [(UNAuthorizationStatus) -> Void] = []
     var requests: [UNNotificationRequest] = []
     var addError: Error?
+    var delaysAddResponses = false
+    var pendingAddCallbacks: [(Error?) -> Void] = []
     private var responseHandler: (() -> Void)?
 
     init(status: UNAuthorizationStatus, requestGranted: Bool, addError: Error? = nil) {
@@ -602,17 +840,21 @@ private final class MockTaskNotificationClient: TaskNotificationClient {
     }
 
     func authorizationStatus(completion: @escaping (UNAuthorizationStatus) -> Void) {
-        completion(status)
+        if delaysStatusResponses { pendingStatusCallbacks.append(completion) }
+        else { completion(status) }
     }
 
-    func requestAuthorization(completion: @escaping (Bool) -> Void) {
+    func requestAuthorization(completion: @escaping (Result<Bool, Error>) -> Void) {
         authorizationRequestCount += 1
-        completion(requestGranted)
+        if let authorizationError { completion(.failure(authorizationError)); return }
+        if status == .notDetermined { status = requestGranted ? .authorized : .denied }
+        completion(.success(requestGranted))
     }
 
     func add(_ request: UNNotificationRequest, completion: @escaping (Error?) -> Void) {
         requests.append(request)
-        completion(addError)
+        if delaysAddResponses { pendingAddCallbacks.append(completion) }
+        else { completion(addError) }
     }
 
     func setResponseHandler(_ handler: @escaping () -> Void) {

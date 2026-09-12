@@ -89,7 +89,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_PATH="$DERIVED_DATA/Build/Products/$CONFIGURATION/$APP_NAME"
 
 run_build() {
-  local build_target=(xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIGURATION" -derivedDataPath "$DERIVED_DATA" CODE_SIGNING_ALLOWED=NO)
+  # Notifications require an application signature that binds Info.plist and the bundle identifier.
+  local build_target=(xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIGURATION" -derivedDataPath "$DERIVED_DATA" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
 
   if [[ "$CLEAN" == "1" ]]; then
     build_target+=(clean)

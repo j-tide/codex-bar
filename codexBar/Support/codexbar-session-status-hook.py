@@ -27,6 +27,10 @@ EVENT_STATUS = {
     "SessionStart": ("ready", "connecting"),
     "UserPromptSubmit": ("running", "processing"),
     "Stop": ("ready", "waiting_input"),
+    "PreCompact": ("running", "compacting"),
+    "PostCompact": ("running", "processing"),
+    "Interrupt": ("ready", "waiting_input"),
+    "SessionEnd": ("ready", "waiting_input"),
 }
 
 LEGACY_PHASE = {
@@ -100,12 +104,15 @@ def _event_variant(event, payload):
             return variant
     if event == "SessionStart":
         return _string_value(payload.get("source"))
+    if event in ("PreCompact", "PostCompact"):
+        return _string_value(payload.get("trigger"))
     return None
 
 
 def _status_for_event(event, variant):
     if event == "SessionStart" and variant and variant.lower() == "compact":
-        return "running", "compacting"
+        # Codex fires this AFTER compaction, before the next model request.
+        return "running", "processing"
     return EVENT_STATUS.get(event, (None, None))
 
 
@@ -193,9 +200,14 @@ def main():
 
     payload = _load_stdin()
     if payload is None:
+        if len(sys.argv) > 1 and sys.argv[1] == "Stop":
+            sys.stdout.write("{}\n")
         return
 
     event = _event_name(payload)
+    if event == "Stop":
+        # Required even when persistence fails; never affect Codex control flow.
+        sys.stdout.write("{}\n")
     variant = _event_variant(event, payload)
     state, phase = _status_for_event(event, variant)
     if state is None:
@@ -239,9 +251,6 @@ def main():
         _legacy_status(state, phase, project_name, updated_at, event),
     )
 
-    # Current Codex releases require successful Stop hooks to return JSON.
-    if event == "Stop":
-        sys.stdout.write("{}\n")
 
 
 if __name__ == "__main__":

@@ -73,7 +73,11 @@ class HookV2Tests(unittest.TestCase):
     def test_fixed_event_mapping_and_schema(self):
         cases = [
             ("SessionStart", None, "ready", "connecting"),
-            ("SessionStart", "compact", "running", "compacting"),
+            ("SessionStart", "compact", "running", "processing"),
+            ("PreCompact", None, "running", "compacting"),
+            ("PostCompact", None, "running", "processing"),
+            ("Interrupt", None, "ready", "waiting_input"),
+            ("SessionEnd", None, "ready", "waiting_input"),
             ("UserPromptSubmit", None, "running", "processing"),
             ("Stop", None, "ready", "waiting_input"),
         ]
@@ -117,6 +121,29 @@ class HookV2Tests(unittest.TestCase):
                 self.assertEqual(output["model"], "gpt-5.6-codex")
                 self.assertEqual(output["source"], event)
                 self.assertRegex(output["eventKey"], r"^[0-9a-f]{64}$")
+
+    def test_compaction_lifecycle_returns_to_processing_then_completes(self):
+        payload = self.base_payload()
+        for event, phase in [("UserPromptSubmit", "processing"), ("PreCompact", "compacting"),
+                             ("PostCompact", "processing"), ("SessionStart", "processing"),
+                             ("Stop", "waiting_input")]:
+            self.invoke(event, payload, "compact" if event == "SessionStart" else None)
+            self.assertEqual(self.read_session("session-alpha")["phase"], phase)
+
+    def test_stop_returns_json_even_when_storage_or_payload_fails(self):
+        (self.home / ".codex").write_text("not-a-directory")
+        for result in [self.invoke("Stop", self.base_payload()), self.invoke("Stop", {}, raw="{bad")]:
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "{}\n")
+            self.assertEqual(result.stderr, "")
+
+    def test_new_turn_has_new_completion_key_and_replay_is_stable(self):
+        self.invoke("Stop", self.base_payload())
+        first = self.read_session("session-alpha")["eventKey"]
+        self.invoke("Stop", self.base_payload())
+        self.assertEqual(first, self.read_session("session-alpha")["eventKey"])
+        self.invoke("Stop", self.base_payload(turn_id="turn-two"))
+        self.assertNotEqual(first, self.read_session("session-alpha")["eventKey"])
 
     def test_two_sessions_create_two_independent_files(self):
         self.assert_success_without_output(

@@ -126,6 +126,57 @@ struct CodexStatsDB {
         return read(db)
     }
 
+    /// Resolve only the active hook records; titles are never written to hook files or notifications.
+    nonisolated static func taskMetadata(for keys: Set<String>) -> [String: CodexTaskMetadata] {
+        guard !keys.isEmpty else { return [:] }
+        var indexed: [String: CodexTaskMetadata] = [:]
+        let indexURL = homeDirectory.appendingPathComponent(".codex/session_index.jsonl")
+        if let handle = try? FileHandle(forReadingFrom: indexURL) {
+            defer { try? handle.close() }
+            if let size = try? handle.seekToEnd() {
+                try? handle.seek(toOffset: size > 8_388_608 ? size - 8_388_608 : 0)
+                if let data = try? handle.read(upToCount: 8_388_608) {
+                    indexed = CodexTaskMetadata.fromIndex(data, matching: keys)
+                }
+            }
+        }
+        let database: [String: CodexTaskMetadata]? = readFromCurrentDB { db in
+            var statement: OpaquePointer?
+            // Recency tracks user-visible activity; updated_at also changes during background work.
+            let modernSQL = "SELECT id, title, COALESCE(recency_at_ms / 1000.0, recency_at, updated_at), created_at, cwd FROM threads WHERE archived = 0 AND updated_at >= ?;"
+            let legacySQL = "SELECT id, title, updated_at, created_at, cwd FROM threads WHERE archived = 0 AND updated_at >= ?;"
+            if sqlite3_prepare_v2(db, modernSQL, -1, &statement, nil) != SQLITE_OK {
+                sqlite3_finalize(statement)
+                statement = nil
+                guard sqlite3_prepare_v2(db, legacySQL, -1, &statement, nil) == SQLITE_OK else { return nil }
+            }
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_int64(statement, 1, Int64(Date().addingTimeInterval(-48 * 60 * 60).timeIntervalSince1970))
+            var result: [String: CodexTaskMetadata] = [:]
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard let id = sqlite3_column_text(statement, 0),
+                      let title = sqlite3_column_text(statement, 1) else { continue }
+                let threadID = String(cString: id)
+                let key = CodexTaskMetadata.taskKey(for: threadID)
+                guard keys.contains(key) else { continue }
+                let text = String(cString: title).split(whereSeparator: { $0.isNewline }).joined(separator: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                var item = indexed[key] ?? CodexTaskMetadata(threadID: threadID, title: String(text.prefix(240)))
+                item.recency = sqlite3_column_double(statement, 2)
+                item.createdAt = sqlite3_column_double(statement, 3)
+                item.cwd = sqlite3_column_text(statement, 4).map { String(cString: $0) }
+                result[key] = item
+                if result.count == keys.count { break }
+            }
+            return result
+        }
+        // A readable DB is authoritative for live, non-archived tasks. The title
+        // index alone also retains archived/deleted entries; use it only offline.
+        let metadata = database ?? indexed
+        let stateURL = homeDirectory.appendingPathComponent(".codex/.codex-global-state.json")
+        return CodexSidebarOrder.applying(to: metadata, stateData: try? Data(contentsOf: stateURL))
+    }
+
     /// threads.tokens_used is lifetime usage, not usage on updated_at's day.
     nonisolated static func snapshot(statSince: Date, dailySince: Date) -> Snapshot? {
         let home = homeDirectory.appendingPathComponent(".codex")

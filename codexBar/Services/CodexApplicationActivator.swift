@@ -2,6 +2,18 @@ import AppKit
 
 @MainActor
 enum CodexApplicationActivator {
+    static func taskURL(for threadID: String?) -> URL? {
+        guard let threadID, UUID(uuidString: threadID) != nil else { return nil }
+        return URL(string: "codex://threads/\(threadID)")
+    }
+
+    @discardableResult
+    static func openTask(_ threadID: String?) -> Bool {
+        if let url = taskURL(for: threadID), NSWorkspace.shared.open(url) { return true }
+        activate()
+        return false
+    }
+
     static func activate() {
         let workspace = NSWorkspace.shared
         if let app = workspace.runningApplications.first(where: {

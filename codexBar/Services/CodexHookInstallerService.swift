@@ -45,14 +45,14 @@ final class CodexHookInstallerService: ObservableObject {
     // PermissionRequest is intentionally not installed. It fires before the
     // final approval decision, including requests that another hook or Codex's
     // automatic review allows without showing anything to the user. Treating it
-    // as user attention creates false notifications. PostToolUse is unnecessary
-    // once that provisional state is no longer recorded.
+    // as user attention creates false notifications. Compaction has its own
+    // PreCompact/PostCompact lifecycle; SessionStart compact runs AFTER it.
     private static let specs: [CodexHookSpec] = [
         CodexHookSpec(
             event: "SessionStart",
             matcher: "compact",
             scriptArguments: ["SessionStart", "compact"],
-            statusMessage: "Marking CodexAppBar compacting"
+            statusMessage: "Marking CodexAppBar processing"
         ),
         CodexHookSpec(
             event: "SessionStart",
@@ -65,6 +65,30 @@ final class CodexHookInstallerService: ObservableObject {
             matcher: nil,
             scriptArguments: ["UserPromptSubmit"],
             statusMessage: "Marking CodexAppBar running"
+        ),
+        CodexHookSpec(
+            event: "PreCompact",
+            matcher: nil,
+            scriptArguments: ["PreCompact"],
+            statusMessage: "Syncing CodexAppBar status"
+        ),
+        CodexHookSpec(
+            event: "PostCompact",
+            matcher: nil,
+            scriptArguments: ["PostCompact"],
+            statusMessage: "Syncing CodexAppBar status"
+        ),
+        CodexHookSpec(
+            event: "Interrupt",
+            matcher: nil,
+            scriptArguments: ["Interrupt"],
+            statusMessage: "Syncing CodexAppBar status"
+        ),
+        CodexHookSpec(
+            event: "SessionEnd",
+            matcher: nil,
+            scriptArguments: ["SessionEnd"],
+            statusMessage: "Syncing CodexAppBar status"
         ),
         CodexHookSpec(
             event: "Stop",

@@ -129,6 +129,10 @@ enum L {
             : "Notifications were not enabled. If permission was denied, allow CodexAppBar notifications in System Settings."
     }
     static var taskAttentionNotificationTitle: String { zh ? "Codex 需要处理" : "Codex needs attention" }
+    static var taskCompletedNotificationTitle: String { zh ? "Codex 任务已完成" : "Codex task completed" }
+    static var taskCompletedNotificationBody: String {
+        zh ? "有一项 Codex 任务已完成，等待你查看。" : "A Codex task has finished and is ready to review."
+    }
     static var taskAttentionNotificationBody: String {
         zh ? "有一项 Codex 任务正在等待你的操作。" : "A Codex task is waiting for your action."
     }

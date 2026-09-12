@@ -200,21 +200,25 @@ struct TaskCenterSnapshot: Equatable, Sendable {
 }
 
 enum TaskActivityDateCoding {
-    static func date(from value: String) -> Date? {
+    private static let fractional: ISO8601DateFormatter = {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional
+    }()
+    private static let standard: ISO8601DateFormatter = {
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return standard
+    }()
+
+    static func date(from value: String) -> Date? {
         if let date = fractional.date(from: value) {
             return date
         }
-
-        let standard = ISO8601DateFormatter()
-        standard.formatOptions = [.withInternetDateTime]
         return standard.date(from: value)
     }
 
     static func string(from date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
+        fractional.string(from: date)
     }
 }
