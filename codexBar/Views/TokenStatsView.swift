@@ -1,93 +1,92 @@
 import SwiftUI
 
 struct TokenStatsView: View {
+    @Environment(\.popupLiveUpdates) private var liveUpdates
     @EnvironmentObject var language: LanguageSettings
     @ObservedObject var service: TokenStatsService = .shared
 
     var body: some View {
-        VStack(spacing: PopupSpacing.regular) {
-            TokenRangeSegmentedControl(selection: Binding(
-                get: { service.range },
-                set: { service.switchTo($0) }
-            ))
-            .id(language.identity)
-
-            HStack(spacing: PopupSpacing.compact) {
-                Text(service.stat.map { TokenFormat.compact($0.totalTokens) } ?? "--")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(service.stat == nil ? .secondary : .accentColor)
-                    .contentTransition(.numericText())
-                Text(L.tokenTotal)
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
-                if service.loading {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .frame(width: 10, height: 10)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    if let stat = service.stat {
+                        AnimatedMetric(value: Double(stat.totalTokens), format: .tokens)
+                            .font(.system(size: 23, weight: .medium)).foregroundStyle(Color.accentColor)
+                    } else {
+                        Text(service.loading ? (L.zh ? "正在读取…" : "Loading…") : (L.zh ? "暂无用量数据" : "Usage unavailable"))
+                            .font(.system(size: 12)).foregroundStyle(.secondary).frame(height: 28)
+                    }
+                    Text("\(service.range.label) · \(L.tokenTotal)").font(.system(size: 10)).foregroundStyle(.secondary)
+                        .help(L.zh ? "按本地日期累计的输入与输出 Token，包含缓存输入；统计此设备的 Codex 会话" : "Input and output tokens by local date, including cached input; Codex sessions on this device")
                 }
-                Spacer()
-                Text(service.stat.map { L.tokenThreadCount($0.threadCount) } ?? "--")
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 5) {
+                    TokenRangeSegmentedControl(selection: Binding(
+                        get: { service.range }, set: { service.switchTo($0) }
+                    )).id(language.identity)
+                    HStack(spacing: 5) {
+                        if service.loading { ProgressView().controlSize(.mini) }
+                        Text(service.stat.map { L.tokenThreadCount($0.threadCount) } ?? "")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                }
             }
-            .frame(maxWidth: .infinity)
-            .animation(.easeOut(duration: 0.25), value: service.stat?.totalTokens)
-
-            ContributionHeatmap(daily: service.daily)
-                .frame(maxWidth: .infinity, alignment: .center)
+            Divider().padding(.top, 2)
+            HStack {
+                Text(L.zh ? "用量趋势" : "Usage history")
+                    .font(.system(size: 10, weight: .medium))
+                Spacer()
+                Text(L.zh ? "固定时间范围" : "Fixed date ranges")
+                    .font(.system(size: 8)).foregroundStyle(.secondary)
+            }
+            TokenUsageHistoryView(daily: service.daily)
         }
-        .padding(.horizontal, PopupSpacing.section)
-        .padding(.vertical, PopupSpacing.regular)
-        .onAppear { service.refresh() }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .task {
+            guard liveUpdates else { return }
+            // Render cached content first and avoid competing with first layout.
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            service.refreshIfNeeded()
+        }
     }
+
+
 }
 
 private struct TokenRangeSegmentedControl: View {
+    @Namespace private var selectionMotion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selection: TokenStatsRange
 
-    private var segmentMinWidth: CGFloat {
-        L.zh ? 54 : 78
-    }
+    private var controlWidth: CGFloat { L.zh ? 138 : 174 }
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(Array(TokenStatsRange.allCases.enumerated()), id: \.element.id) { index, range in
-                segment(for: range)
-
-                if index < TokenStatsRange.allCases.count - 1 {
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.12))
-                        .frame(width: 1, height: 17)
-                        .padding(.vertical, 6)
+            ForEach(TokenStatsRange.allCases) { range in
+                let selected = selection == range
+                Button { selection = range } label: {
+                    Text(L.zh ? range.label : (range == .today ? "Today" : range == .week ? "Week" : "Month"))
+                        .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? Color.accentColor : Color.primary.opacity(0.76))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity).frame(height: 24)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain).focusable(false).focusEffectDisabled()
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: PopupControlMetrics.selectionRadius)
+                            .fill(Color.accentColor.opacity(0.18))
+                            .matchedGeometryEffect(id: "period-selection", in: selectionMotion)
+                    }
+                }
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.10))
-        )
-        .frame(height: 34)
-        .animation(.easeOut(duration: 0.16), value: selection)
-    }
-
-    private func segment(for range: TokenStatsRange) -> some View {
-        let isSelected = selection == range
-
-        return Text(range.label)
-            .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
-            .foregroundColor(isSelected ? .white : .primary.opacity(0.76))
-            .lineLimit(1)
-            .minimumScaleFactor(0.82)
-            .frame(minWidth: segmentMinWidth, minHeight: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isSelected ? Color.accentColor : Color.clear)
-            )
-            .contentShape(Rectangle())
-            .onTapGesture {
-                selection = range
-            }
+        .padding(3).frame(width: controlWidth, height: 30)
+        .popupGlass()
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82), value: selection)
     }
 }
 

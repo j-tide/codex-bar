@@ -2,14 +2,21 @@ import SwiftUI
 
 /// GitHub 风格贡献热力图：展示最近 N 周每天的 token 用量，绿点深浅按对数档位。
 struct ContributionHeatmap: View {
+    @AppStorage("languageOverride") private var chinese = L.systemIsChinese
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.popupLiveUpdates) private var liveUpdates
+    @State private var revealed = false
+    private var visible: Bool { revealed || reduceMotion || !liveUpdates }
     let daily: [String: Int]   // "yyyy-MM-dd" -> tokens
     var weeks: Int = 16
 
     @State private var hoveredCell: HoveredCell?
 
     // GitHub 风格正方形小格子
-    private let cellW: CGFloat = 9
-    private let cellH: CGFloat = 9
+    var cellSize: CGFloat = 11
+    var cellHeight: CGFloat? = nil
+    private var cellW: CGFloat { cellSize }
+    private var cellH: CGFloat { cellHeight ?? cellSize }
     private let gap: CGFloat = 3
     private let tooltipWidth: CGFloat = 104
     private let tooltipHeight: CGFloat = 38
@@ -47,10 +54,12 @@ struct ContributionHeatmap: View {
     }()
 
     /// 网格起点：今天所在周的周一，往回推 weeks-1 周
-    private var columns: [[Date]] {
+    private var columns: [[Date]] { Self.dateColumns(weeks: weeks) }
+
+    static func dateColumns(weeks: Int = 16, now: Date = Date()) -> [[Date]] {
         var cal = Calendar(identifier: .gregorian)
         cal.firstWeekday = 2 // 周一
-        let today = cal.startOfDay(for: Date())
+        let today = cal.startOfDay(for: now)
         let weekday = cal.component(.weekday, from: today)
         let offsetToMon = ((weekday - cal.firstWeekday) + 7) % 7
         guard let thisMon = cal.date(byAdding: .day, value: -offsetToMon, to: today),
@@ -81,7 +90,7 @@ struct ContributionHeatmap: View {
     }
 
     /// GitHub 经典 5 档实色梯度（深浅分明，不靠 opacity）
-    private func color(_ lvl: Int) -> Color {
+    static func color(_ lvl: Int) -> Color {
         switch lvl {
         case 0: return Color.primary.opacity(0.08) // 空：随深浅主题自适应的低透明度
         case 1: return Color(red: 0.62, green: 0.78, blue: 0.65) // 柔和浅绿
@@ -100,17 +109,40 @@ struct ContributionHeatmap: View {
     }
 
     var body: some View {
+        let _ = chinese
         let today = Calendar(identifier: .gregorian).startOfDay(for: Date())
+        let cells = columns.enumerated().flatMap { column, days in
+            days.enumerated().map { row, day in
+                let key = Self.fmt.string(from: day)
+                return HeatmapDrawing.Cell(date: day, key: key, column: column, row: row,
+                    level: level(daily[key] ?? 0), isFuture: day > today)
+            }
+        }
         ZStack(alignment: .topLeading) {
-            HStack(alignment: .top, spacing: gap) {
-                ForEach(Array(columns.enumerated()), id: \.offset) { column, col in
-                    VStack(spacing: gap) {
-                        ForEach(Array(col.enumerated()), id: \.element) { row, day in
-                            heatmapCell(day: day, column: column, row: row, today: today)
+            HeatmapDrawing(cells: cells, cellWidth: cellW, cellHeight: cellH, gap: gap,
+                reveal: visible ? 1 : 0, hoveredKey: hoveredCell?.key, reduceMotion: reduceMotion)
+                .animation(reduceMotion || !liveUpdates ? nil : .linear(duration: 0.68), value: revealed)
+                .contentShape(Rectangle())
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let location):
+                        let column = Int(floor(location.x / (cellW + gap)))
+                        let row = Int(floor(location.y / (cellH + gap)))
+                        let index = column * 7 + row
+                        guard column >= 0, column < weeks, row >= 0, row < 7,
+                              cells.indices.contains(index), !cells[index].isFuture,
+                              location.x - CGFloat(column) * (cellW + gap) <= cellW,
+                              location.y - CGFloat(row) * (cellH + gap) <= cellH else {
+                            hoveredCell = nil
+                            return
                         }
+                        let cell = cells[index]
+                        if hoveredCell?.key != cell.key {
+                            hoveredCell = HoveredCell(key: cell.key, date: cell.date, column: column, row: row)
+                        }
+                    case .ended: hoveredCell = nil
                     }
                 }
-            }
 
             if let hoveredCell {
                 usageTooltip(for: hoveredCell)
@@ -125,41 +157,14 @@ struct ContributionHeatmap: View {
             }
         }
         .frame(width: gridWidth, height: gridHeight)
-        .animation(.easeOut(duration: 0.12), value: hoveredCell)
-    }
-
-    private func heatmapCell(day: Date, column: Int, row: Int, today: Date) -> some View {
-        let key = Self.fmt.string(from: day)
-        let tokens = daily[key] ?? 0
-        let isFuture = day > today
-        let isHovered = hoveredCell?.key == key
-
-        return RoundedRectangle(cornerRadius: 2)
-            .fill(isFuture ? Color.clear : color(level(tokens)))
-            .frame(width: cellW, height: cellH)
-            .overlay {
-                if isHovered {
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(Color.accentColor, lineWidth: 1.5)
-                        .frame(width: cellW + 4, height: cellH + 4)
-                        .allowsHitTesting(false)
-                }
-            }
-            .contentShape(Rectangle())
-            .onHover { isInside in
-                guard !isFuture else { return }
-                if isInside {
-                    hoveredCell = HoveredCell(
-                        key: key,
-                        date: day,
-                        column: column,
-                        row: row
-                    )
-                } else if hoveredCell?.key == key {
-                    hoveredCell = nil
-                }
-            }
-            .zIndex(isHovered ? 1 : 0)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hoveredCell)
+        .task {
+            guard liveUpdates, !reduceMotion else { return }
+            try? await Task.sleep(for: .milliseconds(60))
+            guard !Task.isCancelled else { return }
+            revealed = true
+        }
+        .onDisappear { revealed = false; hoveredCell = nil }
     }
 
     private func usageTooltip(for cell: HoveredCell) -> some View {
@@ -177,7 +182,9 @@ struct ContributionHeatmap: View {
         }
         .padding(.horizontal, 8)
         .frame(width: tooltipWidth, height: tooltipHeight, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        // A transient NSVisualEffect-backed material can change the enclosing
+        // glass panel's backdrop composition. Keep the tooltip a local paint layer.
+        .background(PopupLayout.background, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1)
@@ -207,5 +214,51 @@ struct ContributionHeatmap: View {
     private func tooltipDate(_ date: Date) -> String {
         let formatter = L.zh ? Self.zhTooltipDateFormatter : Self.enTooltipDateFormatter
         return formatter.string(from: date)
+    }
+}
+
+/// One animated surface instead of 112 individually laid-out, hover-tracked views.
+private struct HeatmapDrawing: View, Animatable {
+    struct Cell {
+        let date: Date
+        let key: String
+        let column: Int
+        let row: Int
+        let level: Int
+        let isFuture: Bool
+    }
+    let cells: [Cell]
+    let cellWidth: CGFloat
+    let cellHeight: CGFloat
+    let gap: CGFloat
+    var reveal: Double
+    let hoveredKey: String?
+    let reduceMotion: Bool
+    var animatableData: Double {
+        get { reveal }
+        set { reveal = newValue }
+    }
+
+    var body: some View {
+        Canvas { context, _ in
+            for cell in cells where !cell.isFuture {
+                let delay = Double(cell.column) * 0.018 + Double(cell.row) * 0.012
+                let time = max(0, min(1, (reveal * 0.68 - delay) / 0.34))
+                let spring = reveal >= 1 ? 1 : 1 - exp(-7 * time) * cos(8 * time)
+                let hovered = cell.key == hoveredKey
+                let scale = (0.5 + 0.5 * spring) * (hovered && !reduceMotion ? 1.1 : 1)
+                let rect = CGRect(x: CGFloat(cell.column) * (cellWidth + gap),
+                    y: CGFloat(cell.row) * (cellHeight + gap), width: cellWidth, height: cellHeight)
+                let scaled = rect.insetBy(dx: cellWidth * (1 - scale) / 2, dy: cellHeight * (1 - scale) / 2)
+                context.opacity = 0.2 + 0.8 * min(1, spring)
+                context.fill(Path(roundedRect: scaled, cornerRadius: 2), with: .color(ContributionHeatmap.color(cell.level)))
+                if hovered {
+                    context.opacity = 1
+                    context.stroke(Path(roundedRect: scaled.insetBy(dx: -2, dy: -2), cornerRadius: 3),
+                        with: .color(.accentColor), lineWidth: 1.5)
+                }
+            }
+        }
+        .accessibilityLabel(L.zh ? "每日 Token 用量热力图" : "Daily token usage heatmap")
     }
 }
