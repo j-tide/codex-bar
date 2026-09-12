@@ -8,7 +8,7 @@ struct TokenAccount: Codable, Identifiable {
     var accessToken: String
     var refreshToken: String
     var idToken: String
-    var expiresAt: Date?              // 订阅到期时间（兼容已有 expires_at 数据）
+    var expiresAt: Date?              // 旧凭证历史日期，仅兼容存储，不用于当前订阅展示
     var accessTokenExpiresAt: Date?   // access token 自身的 JWT exp
     var planType: String
     var fiveHourUsedPercent: Double? // Plus 5h 窗口已使用%；其他计划为 nil
@@ -23,9 +23,15 @@ struct TokenAccount: Codable, Identifiable {
     var tokenExpired: Bool       // 授权失效，需重新授权
     var authorizationInvalidConfirmed: Bool // 新版多次确认或刷新凭据被明确拒绝
     var organizationName: String?
+    var codexProfile: CodexAccountProfile? = nil
+    var subscriptionBilling: SubscriptionBilling? = nil
+    var subscriptionRefreshFailed = false
 
     enum CodingKeys: String, CodingKey {
         case email
+        case subscriptionBilling = "subscription_billing"
+        case subscriptionRefreshFailed = "subscription_refresh_failed"
+        case codexProfile = "codex_profile"
         case accountId = "account_id"
         case chatgptAccountId = "chatgpt_account_id"
         case organizationName = "organization_name"
@@ -64,7 +70,8 @@ struct TokenAccount: Codable, Identifiable {
         accessToken = try c.decode(String.self, forKey: .accessToken)
         refreshToken = try c.decode(String.self, forKey: .refreshToken)
         idToken = try c.decode(String.self, forKey: .idToken)
-        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        let storedSubscriptionExpiry = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        expiresAt = AccountBuilder.subscriptionActiveUntil(idToken: idToken) ?? storedSubscriptionExpiry
         accessTokenExpiresAt = try c.decodeIfPresent(Date.self, forKey: .accessTokenExpiresAt)
         planType = try c.decodeIfPresent(String.self, forKey: .planType) ?? "free"
         lastChecked = try c.decodeIfPresent(Date.self, forKey: .lastChecked)
@@ -117,6 +124,9 @@ struct TokenAccount: Codable, Identifiable {
             forKey: .authorizationInvalidConfirmed
         ) ?? false
         organizationName = try c.decodeIfPresent(String.self, forKey: .organizationName)
+        codexProfile = try c.decodeIfPresent(CodexAccountProfile.self, forKey: .codexProfile)
+        subscriptionBilling = try c.decodeIfPresent(SubscriptionBilling.self, forKey: .subscriptionBilling)
+        subscriptionRefreshFailed = try c.decodeIfPresent(Bool.self, forKey: .subscriptionRefreshFailed) ?? false
     }
 
     init(email: String = "", accountId: String = "", chatgptAccountId: String = "", accessToken: String = "",
@@ -158,6 +168,14 @@ struct TokenAccount: Codable, Identifiable {
     }
 
     // MARK: - Computed
+
+    var displayName: String {
+        if let username = codexProfile?.username, !username.isEmpty { return "@" + username }
+        if let name = codexProfile?.displayName, !name.isEmpty { return name }
+        if let organizationName, !organizationName.isEmpty, !organizationName.hasPrefix("user-") { return organizationName }
+        if !email.isEmpty { return email }
+        return String(accountId.prefix(8))
+    }
 
     var isBanned: Bool { isSuspended }
     var hasFiveHourQuota: Bool {
@@ -228,5 +246,55 @@ struct TokenPool: Codable {
 
     init(accounts: [TokenAccount] = []) {
         self.accounts = accounts
+    }
+}
+
+/// Profile fields returned by Codex's own profile endpoint, never inferred from email.
+struct CodexAccountProfile: Codable, Sendable, Equatable {
+    let username: String?
+    let displayName: String?
+    let checkedAt: Date
+
+    static func parse(_ data: Data, checkedAt: Date) -> Self? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let profile = root["profile"] as? [String: Any],
+              profile.keys.contains("username") || profile.keys.contains("display_name") else { return nil }
+        for key in ["username", "display_name"] {
+            if let value = profile[key], !(value is String), !(value is NSNull) { return nil }
+        }
+        func text(_ key: String) -> String? {
+            guard let value = (profile[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty else { return nil }
+            return value
+        }
+        let username = text("username").map { $0.hasPrefix("@") ? String($0.dropFirst()) : $0 }
+        return Self(username: username, displayName: text("display_name"), checkedAt: checkedAt)
+    }
+}
+
+/// Authoritative subscription endpoint snapshot. Never synthesized from JWT claims,
+/// quota reset dates, or accounts/check's distinct expires_at field.
+struct SubscriptionBilling: Codable, Equatable {
+    let activeUntil: Date?
+    let willRenew: Bool?
+    let checkedAt: Date
+
+    static func parse(_ data: Data, checkedAt: Date) -> SubscriptionBilling? {
+        struct Payload: Decodable {
+            let id: String
+            let plan_type: String
+            let active_until: String?
+            let will_renew: Bool?
+        }
+        guard let payload = try? JSONDecoder().decode(Payload.self, from: data),
+              !payload.id.isEmpty, !payload.plan_type.isEmpty else { return nil }
+        var date: Date?
+        if let value = payload.active_until {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+            guard date != nil else { return nil }
+        }
+        return SubscriptionBilling(activeUntil: date, willRenew: payload.will_renew, checkedAt: checkedAt)
     }
 }

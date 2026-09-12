@@ -10,6 +10,8 @@ final class WhamService {
     private let now: () -> Date
     private let credentialRefreshService: RefreshService?
     private let unauthorizedRetryDelayNanoseconds: UInt64
+    private var profileRetryAfter: [FlightKey: Date] = [:]
+    private var subscriptionRetryAfter: [FlightKey: Date] = [:]
     private var flights: [FlightKey: Task<Void, Never>] = [:]
     private var unauthorizedSince: [FlightKey: Date] = [:]
     private let freshCredentialGrace: TimeInterval = 2 * 60
@@ -135,7 +137,7 @@ final class WhamService {
     }
 
     /// 刷新单个账号的用量、组织名和重置机会
-    func refreshOne(key: AccountKey, store: TokenStore) async {
+    func refreshOne(key: AccountKey, store: TokenStore, forceSubscriptionRefresh: Bool = false) async {
         guard let snapshot = store.snapshot(for: key) else { return }
         let flightKey = FlightKey(accountKey: key, revision: snapshot.revision)
         if let existing = flights[flightKey] {
@@ -151,11 +153,76 @@ final class WhamService {
         }
 
         let task = Task { [self] in
+            async let profile: Void = refreshProfile(snapshot: snapshot, store: store)
+            async let billing: Void = refreshSubscription(snapshot: snapshot, store: store, force: forceSubscriptionRefresh)
             await performRefresh(snapshot: snapshot, store: store)
+            await profile
+            await billing
         }
         flights[flightKey] = task
         await task.value
         flights[flightKey] = nil
+    }
+
+    /// The billing endpoint is optional: 401/403 (including Cloudflare challenges),
+    /// transport failures and malformed responses never affect account availability.
+    private func refreshSubscription(snapshot: CredentialSnapshot, store: TokenStore, force: Bool) async {
+        guard store.account(for: snapshot.key)?.planType.lowercased() != "free" else { return }
+        let key = FlightKey(accountKey: snapshot.key, revision: snapshot.revision)
+        if !force {
+            if let retryAt = subscriptionRetryAfter[key], now() < retryAt { return }
+            if let account = store.account(for: snapshot.key), !account.subscriptionRefreshFailed,
+               let checkedAt = account.subscriptionBilling?.checkedAt,
+               now().timeIntervalSince(checkedAt) < 3600 { return }
+        }
+        subscriptionRetryAfter = subscriptionRetryAfter.filter { $0.value > now() }
+        subscriptionRetryAfter[key] = now().addingTimeInterval(300)
+        let billing = try? await fetchSubscription(snapshot: snapshot)
+        guard !Task.isCancelled else { return }
+        if store.applySubscriptionBilling(billing, to: snapshot.key, ifCurrent: snapshot.revision) == .applied,
+           billing != nil { subscriptionRetryAfter[key] = nil }
+    }
+
+    func fetchSubscription(snapshot: CredentialSnapshot) async throws -> SubscriptionBilling {
+        var components = URLComponents(string: "https://chatgpt.com/backend-api/subscriptions")!
+        components.queryItems = [URLQueryItem(name: "account_id", value: snapshot.chatgptAccountId)]
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 6
+        request.setValue("Bearer \(snapshot.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(snapshot.chatgptAccountId, forHTTPHeaderField: "ChatGPT-Account-ID")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("https://chatgpt.com/", forHTTPHeaderField: "Referer")
+        let (data, response) = try await httpClient.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw WhamError.invalidResponse }
+        guard http.statusCode == 200 else { throw WhamError.httpError(http.statusCode) }
+        guard let billing = SubscriptionBilling.parse(data, checkedAt: now()) else { throw WhamError.parseError }
+        return billing
+    }
+
+    /// A separate, optional read: profile failure never invalidates credentials or
+    /// blocks quota publication. Cache successes for an hour and retry failures slowly.
+    private func refreshProfile(snapshot: CredentialSnapshot, store: TokenStore) async {
+        let key = FlightKey(accountKey: snapshot.key, revision: snapshot.revision)
+        if let checkedAt = store.account(for: snapshot.key)?.codexProfile?.checkedAt,
+           now().timeIntervalSince(checkedAt) < 3600 { return }
+        if let retryAt = profileRetryAfter[key], now() < retryAt { return }
+        profileRetryAfter = profileRetryAfter.filter { $0.value > now() }
+        profileRetryAfter[key] = now().addingTimeInterval(300)
+        var request = URLRequest(url: URL(string: "https://chatgpt.com/backend-api/wham/profiles/me")!)
+        request.timeoutInterval = 6
+        request.setValue("Bearer \(snapshot.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(snapshot.chatgptAccountId, forHTTPHeaderField: "ChatGPT-Account-ID")
+        request.setValue("codex-1", forHTTPHeaderField: "OpenAI-Beta")
+        request.setValue("Codex Desktop", forHTTPHeaderField: "originator")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let (data, response) = try? await httpClient.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let profile = CodexAccountProfile.parse(data, checkedAt: now()),
+              !Task.isCancelled else { return }
+        if store.applyProfile(profile, to: snapshot.key, ifCurrent: snapshot.revision) == .applied {
+            profileRetryAfter[key] = nil
+        }
     }
 
     private func performRefresh(
@@ -384,11 +451,11 @@ final class WhamService {
     }
 
     /// 批量刷新 store 中所有账号的用量、组织名和重置机会
-    func refreshAll(store: TokenStore) async {
+    func refreshAll(store: TokenStore, forceSubscriptionRefresh: Bool = false) async {
         await withTaskGroup(of: Void.self) { group in
             for key in store.accountKeys() {
                 group.addTask {
-                    await self.refreshOne(key: key, store: store)
+                    await self.refreshOne(key: key, store: store, forceSubscriptionRefresh: forceSubscriptionRefresh)
                 }
             }
         }

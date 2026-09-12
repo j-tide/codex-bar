@@ -1,7 +1,11 @@
 import SwiftUI
 
-/// One org/account row under an email group
+/// Small account pools show full quotas; larger pools keep backups compact.
 struct AccountRowView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.popupLiveUpdates) private var liveUpdates
+    @State private var quotaRevealed = false
+    private var quotaReveal: CGFloat { quotaRevealed || reduceMotion || !liveUpdates ? 1 : 0 }
     @EnvironmentObject var language: LanguageSettings
     @EnvironmentObject var quotaDisplay: QuotaDisplaySettings
 
@@ -9,6 +13,9 @@ struct AccountRowView: View {
     let isActive: Bool
     let now: Date
     let isRefreshing: Bool
+    var showsDetails = false
+    var compactPool = false
+    private var expanded: Bool { isActive || showsDetails }
     let onActivate: () -> Void
     let onRefresh: () -> Void
     let onReauth: () -> Void
@@ -29,7 +36,7 @@ struct AccountRowView: View {
         let weeklyResetDescription = account.weeklyResetDescription
         let showWeeklyReset = !weeklyResetDescription.isEmpty
 
-        VStack(alignment: .leading, spacing: PopupSpacing.compact) {
+        VStack(alignment: .leading, spacing: 7) {
             // Line 1: org name + plan badge + active mark + switch button
             HStack(spacing: PopupSpacing.compact) {
                 Circle()
@@ -37,30 +44,46 @@ struct AccountRowView: View {
                     .frame(width: 7, height: 7)
 
                 Text(displayName)
-                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                    .foregroundColor(isActive ? .accentColor : .primary)
-                    .lineLimit(1)
+                    .font(.system(size: 13, weight: isActive ? .semibold : .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1).truncationMode(.middle)
+                    .help(displayName)
 
-                Text(planBadgeText)
-                    .font(.system(size: 9, weight: .medium))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(planBadgeColor.opacity(0.15))
-                    .foregroundColor(planBadgeColor)
-                    .cornerRadius(3)
+                accountBadge(color: planBadgeColor) { Text(planBadgeText) }
 
-                if hasResetCredits {
-                    resetCreditsBadge
-                }
+                if hasResetCredits { resetCreditsBadge }
 
                 if isActive {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.system(size: 10))
+                    accountBadge(color: PopupLayout.accent) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text(L.zh ? "当前账号" : "Current")
+                    }
                 }
 
                 Spacer()
 
+                if compactPool {
+                    Menu {
+                        Button(L.refreshUsage, action: onRefresh).disabled(isRefreshing || account.isBanned)
+                        if account.tokenExpired { Button(L.reauth, action: onReauth) }
+                        Divider()
+                        Button(L.delete, role: .destructive, action: confirmDelete)
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
+                            .frame(width: 20, height: 22)
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .focusable(false).focusEffectDisabled()
+                    .help(L.zh ? "账号操作" : "Account actions")
+                    .accessibilityLabel("\(displayName) · \(L.zh ? "账号操作" : "Account actions")")
+                    if account.tokenExpired {
+                        Button(L.reauth, action: onReauth).font(.system(size: 10))
+                            .popupGlassButton(tint: .orange, compact: true)
+                    } else if !isActive && !account.isBanned {
+                        Button(L.switchBtn, action: onActivate).font(.system(size: 11))
+                            .popupGlassButton(tint: PopupLayout.accent, compact: true)
+                    }
+                } else {
                 // 删除按钮（NSAlert 二次确认）
                 Button {
                     let alert = NSAlert()
@@ -68,7 +91,7 @@ struct AccountRowView: View {
                     alert.alertStyle = .warning
                     alert.addButton(withTitle: L.delete)
                     alert.addButton(withTitle: L.cancel)
-                    if alert.runModal() == .alertFirstButtonReturn {
+                    if PopupModalPresenter.run({ alert.runModal() }) == .alertFirstButtonReturn {
                         onDelete()
                     }
                 } label: {
@@ -78,12 +101,12 @@ struct AccountRowView: View {
                 .buttonStyle(.borderless)
                 .focusable(false)
                 .foregroundColor(.secondary)
+                .help(L.delete)
+                .accessibilityLabel(L.confirmDelete(displayName))
 
                 if account.tokenExpired {
                     Button(L.reauth, action: onReauth)
-                        .buttonStyle(.borderedProminent)
-                        .focusable(false)
-                        .controlSize(.mini)
+                        .popupGlassButton(tint: .orange, compact: true)
                         .font(.system(size: 10, weight: .medium))
                         .tint(.orange)
                 } else if !account.isBanned {
@@ -99,19 +122,30 @@ struct AccountRowView: View {
                     .focusable(false)
                     .foregroundColor(.secondary)
                     .disabled(isRefreshing)
+                    .help(L.refreshUsage)
 
                     if !isActive {
-                        Button(L.switchBtn, action: onActivate)
-                            .buttonStyle(.borderedProminent)
-                            .focusable(false)
-                            .controlSize(.mini)
-                        .font(.system(size: 10, weight: .medium))
+                        Button(action: onActivate) {
+                            Text(L.switchBtn).font(.system(size: 11))
+                        }.popupGlassButton(tint: PopupLayout.accent, compact: true)
                     }
+                }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if shouldShowResetCreditsExpiration {
+            if expanded {
+                HStack(spacing: 8) {
+                    Text(account.email).font(.system(size: 11)).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle).help(account.email)
+                    Spacer(minLength: 0)
+                    subscriptionValidity
+                }
+            } else {
+                subscriptionValidity
+            }
+
+            if shouldShowResetCreditsExpiration && !compactPool {
                 resetCreditsExpirationInfo
             }
 
@@ -144,14 +178,14 @@ struct AccountRowView: View {
                             displayPercent: fiveHourDisplayPercent,
                             usedPercent: fiveHourUsedPercent,
                             resetDescription: fiveHourResetDescription,
-                            showReset: !fiveHourResetDescription.isEmpty
+                            showReset: !compactPool && !fiveHourResetDescription.isEmpty
                         )
                         quotaColumn(
                             label: "7d",
                             displayPercent: weeklyDisplayPercent,
                             usedPercent: account.weeklyUsedPercent,
                             resetDescription: weeklyResetDescription,
-                            showReset: showWeeklyReset
+                            showReset: !compactPool && showWeeklyReset
                         )
                     }
                 } else {
@@ -160,30 +194,65 @@ struct AccountRowView: View {
                         displayPercent: weeklyDisplayPercent,
                         usedPercent: account.weeklyUsedPercent,
                         resetDescription: weeklyResetDescription,
-                        showReset: showWeeklyReset
+                        showReset: !compactPool && showWeeklyReset
                     )
                 }
             }
         }
         .padding(.vertical, PopupSpacing.regular)
-        .padding(.horizontal, PopupSpacing.regular)
+        .padding(.horizontal, expanded || compactPool ? 10 : 0)
         .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(isActive ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.045))
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(isActive ? PopupLayout.accent.opacity(0.09) : Color.primary.opacity(compactPool ? 0.025 : 0))
         )
         .overlay(alignment: .leading) {
             if isActive {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.accentColor)
-                    .frame(width: 3)
-                    .padding(.vertical, 4)
+                Capsule().fill(Color.accentColor).frame(width: 3).padding(.vertical, 7)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: isActive)
+        .task {
+            guard liveUpdates, !reduceMotion else { return }
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.7)) { quotaRevealed = true }
+        }
+        .onDisappear { quotaRevealed = false }
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+        .help(account.email)
+    }
+
+    @ViewBuilder
+    private var subscriptionValidity: some View {
+        if account.planType.lowercased() != "free" {
+            if let billing = account.subscriptionBilling, let date = billing.activeUntil {
+                let stale = account.subscriptionRefreshFailed || now.timeIntervalSince(billing.checkedAt) >= 3600 || date <= now
+                let label = billing.willRenew == true
+                    ? (L.zh ? "下次续订" : "Renews")
+                    : (L.zh ? "有效期至" : "Valid until")
+                let dateText = date.formatted(.dateTime.month(.twoDigits).day(.twoDigits))
+                Text("\(label) \(dateText)\(stale ? (L.zh ? " · 缓存" : " · Cached") : "")")
+                    .font(.system(size: 9)).foregroundStyle(.secondary).fixedSize()
+                    .help("\(label): \(date.formatted(date: .complete, time: .shortened))\n\(L.zh ? "来源：订阅接口 active_until；更新时间" : "Source: subscriptions active_until; checked"): \(billing.checkedAt.formatted(date: .abbreviated, time: .shortened))\(stale ? (L.zh ? "\n当前显示上次查询结果，等待重新验证" : "\nShowing the last result, awaiting verification") : "")")
+            } else {
+                Text(L.zh ? "有效期未获取" : "Validity unavailable")
+                    .font(.system(size: 9)).foregroundStyle(.secondary).fixedSize()
+                    .help(L.zh ? "尚未从订阅接口获取有效期；不会使用登录凭证里的历史日期。" : "Subscription validity has not been retrieved. Historical sign-in credential dates are not used.")
             }
         }
     }
 
+    private func confirmDelete() {
+        let alert = NSAlert()
+        alert.messageText = L.confirmDelete(displayName)
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L.delete)
+        alert.addButton(withTitle: L.cancel)
+        if PopupModalPresenter.run({ alert.runModal() }) == .alertFirstButtonReturn { onDelete() }
+    }
+
     private var displayName: String {
-        if let org = account.organizationName, !org.isEmpty { return org }
-        return String(account.accountId.prefix(8))
+        account.displayName
     }
 
     private var statusColor: Color {
@@ -193,10 +262,11 @@ struct AccountRowView: View {
 
     private var planBadgeColor: Color {
         switch normalizedPlanType {
-        case "free": return .green
+        case "free": return .secondary
         case "prolite", "pro5x", "codexpro5x": return .blue
-        case "pro", "promax", "pro20x", "codexpro20x": return .indigo
-        case "team": return .teal
+        case "pro", "promax", "pro20x", "codexpro20x": return CodexStatusPalette.warning
+        case "team", "business": return .teal
+        case "enterprise": return .indigo
         case "plus": return .purple
         default: return .gray
         }
@@ -216,20 +286,24 @@ struct AccountRowView: View {
             .replacingOccurrences(of: "[_\\-\\s]", with: "", options: .regularExpression)
     }
 
+    private func accountBadge<Content: View>(color: Color, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 3, content: content)
+            .font(.system(size: 9, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .frame(height: 18)
+            .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 4))
+            .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(color.opacity(0.18), lineWidth: 0.5) }
+            .fixedSize()
+    }
+
     private var resetCreditsBadge: some View {
-        HStack(spacing: 2) {
+        accountBadge(color: resetCreditsColor) {
             Image(systemName: "gift.fill")
-                .font(.system(size: 8, weight: .medium))
             Text(resetCreditsText)
-                .font(.system(size: 9, weight: .medium))
-                .monospacedDigit()
         }
-        .foregroundColor(resetCreditsColor)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 1)
-        .background(resetCreditsColor.opacity(0.12))
-        .cornerRadius(3)
-        .help(L.resetCreditsHelp)
+        .help(shouldShowResetCreditsExpiration ? "\(L.resetCreditsHelp)\n\(resetCreditsExpirationText)" : L.resetCreditsHelp)
         .accessibilityLabel(L.resetCreditsAvailable)
         .accessibilityValue(resetCreditsText)
     }
@@ -322,29 +396,35 @@ struct AccountRowView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: PopupSpacing.compact) {
             HStack(spacing: PopupSpacing.compact) {
-                Text(label)
-                    .font(.system(size: 9))
+                Text("\(quotaDisplay.amountMode.shortLabel) \(label)")
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 Spacer()
-                Text("\(Int(displayPercent))%")
-                    .font(.system(size: 9, weight: .medium))
+                AnimatedMetric(value: displayPercent, format: .percent)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(usageColor(usedPercent))
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.3), value: displayPercent)
             }
-            ProgressView(value: min(displayPercent / 100, 1.0))
-                .tint(usageColor(usedPercent))
-                .scaleEffect(x: 1, y: 0.9)
-                .frame(height: 5)
-                .animation(.easeInOut(duration: 0.4), value: displayPercent)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.10))
+                    Capsule().fill(usageColor(usedPercent))
+                        .frame(width: geometry.size.width * min(max(displayPercent, 0), 100) / 100 * quotaReveal)
+                }
+            }
+            .frame(height: 5)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: displayPercent)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(quotaDisplay.amountMode.shortLabel) \(label)")
+            .accessibilityValue("\(Int(displayPercent))%")
 
             if showReset {
                 Text("\(label): \(resetDescription)")
-                    .font(.system(size: 9))
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity)
+        .help(resetDescription.isEmpty ? label : "\(label): \(resetDescription)")
     }
 }

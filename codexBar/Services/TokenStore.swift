@@ -205,6 +205,10 @@ final class TokenStore: ObservableObject {
             merged.email = normalized.email
             merged.accountId = normalized.accountId
             merged.chatgptAccountId = normalized.chatgptAccountId
+            if merged.chatgptAccountId != current.chatgptAccountId {
+                merged.subscriptionBilling = nil
+                merged.subscriptionRefreshFailed = false
+            }
             merged.accessToken = normalized.accessToken
             merged.refreshToken = normalized.refreshToken
             merged.idToken = normalized.idToken
@@ -234,6 +238,10 @@ final class TokenStore: ObservableObject {
             var merged = current
             merged.email = incoming.email.isEmpty ? current.email : incoming.email
             merged.chatgptAccountId = incoming.chatgptAccountId
+            if merged.chatgptAccountId != current.chatgptAccountId {
+                merged.subscriptionBilling = nil
+                merged.subscriptionRefreshFailed = false
+            }
             merged.accessToken = incoming.accessToken
             merged.refreshToken = incoming.refreshToken
             merged.idToken = incoming.idToken
@@ -277,6 +285,10 @@ final class TokenStore: ObservableObject {
             merged.chatgptAccountId = incoming.chatgptAccountId.isEmpty
                 ? current.chatgptAccountId
                 : incoming.chatgptAccountId
+            if merged.chatgptAccountId != current.chatgptAccountId {
+                merged.subscriptionBilling = nil
+                merged.subscriptionRefreshFailed = false
+            }
             merged.accessToken = incoming.accessToken
             if !incoming.refreshToken.isEmpty { merged.refreshToken = incoming.refreshToken }
             if !incoming.idToken.isEmpty { merged.idToken = incoming.idToken }
@@ -357,6 +369,28 @@ final class TokenStore: ObservableObject {
     }
 
     @discardableResult
+    func applyProfile(_ profile: CodexAccountProfile, to key: AccountKey,
+                      ifCurrent expectedRevision: CredentialRevision) -> ConditionalCommit {
+        guard let index = index(for: key) else { return .missing }
+        guard revisions[key] == expectedRevision else { return .stale }
+        accounts[index].codexProfile = profile
+        save()
+        return .applied
+    }
+
+    /// Optional billing reads have their own status and never invalidate credentials.
+    @discardableResult
+    func applySubscriptionBilling(_ billing: SubscriptionBilling?, to key: AccountKey,
+                                  ifCurrent expectedRevision: CredentialRevision) -> ConditionalCommit {
+        guard let index = index(for: key) else { return .missing }
+        guard revisions[key] == expectedRevision else { return .stale }
+        if let billing { accounts[index].subscriptionBilling = billing }
+        accounts[index].subscriptionRefreshFailed = billing == nil
+        save()
+        return .applied
+    }
+
+    @discardableResult
     func markTokenExpired(
         _ key: AccountKey,
         ifCurrent expectedRevision: CredentialRevision
@@ -415,6 +449,7 @@ final class TokenStore: ObservableObject {
         current.accessToken = credentials.accessToken
         current.refreshToken = credentials.refreshToken
         current.idToken = credentials.idToken
+        current.expiresAt = AccountBuilder.subscriptionActiveUntil(idToken: credentials.idToken) ?? current.expiresAt
         current.accessTokenExpiresAt = credentials.accessTokenExpiresAt
         current.tokenExpired = false
         current.authorizationInvalidConfirmed = false
@@ -523,6 +558,7 @@ final class TokenStore: ObservableObject {
             active.accessToken = credentials.accessToken
             active.refreshToken = credentials.refreshToken
             active.idToken = credentials.idToken
+            active.expiresAt = AccountBuilder.subscriptionActiveUntil(idToken: credentials.idToken) ?? active.expiresAt
             active.accessTokenExpiresAt = tokenDateClaim("exp", in: credentials.accessToken)
             active.tokenExpired = false
             active.authorizationInvalidConfirmed = false

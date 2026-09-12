@@ -37,15 +37,7 @@ struct AccountBuilder {
             accountId = ""
         }
 
-        // 订阅到期时间（从 id_token 的 auth claim 取）
-        let idAuthClaims = idClaims["https://api.openai.com/auth"] as? [String: Any] ?? [:]
-        var expiresAt: Date? = nil
-        if let untilStr = idAuthClaims["chatgpt_subscription_active_until"] as? String {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            expiresAt = formatter.date(from: untilStr)
-                ?? ISO8601DateFormatter().date(from: untilStr)
-        }
+        let expiresAt = subscriptionActiveUntil(idToken: tokens.idToken)
 
         // access_token 自身过期
         let tokenExp = claims["exp"] as? Double
@@ -62,6 +54,15 @@ struct AccountBuilder {
             accessTokenExpiresAt: tokenExpiresAt,
             planType: planType
         )
+    }
+
+    /// Subscription validity is distinct from JWT exp and quota reset dates.
+    static func subscriptionActiveUntil(idToken: String) -> Date? {
+        let auth = decodeJWT(idToken)["https://api.openai.com/auth"] as? [String: Any]
+        guard let value = auth?["chatgpt_subscription_active_until"] as? String else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
     }
 
     /// 解码 JWT payload（不验签）

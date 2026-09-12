@@ -773,6 +773,37 @@ final class AccountRefreshRaceTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(fixture.store.account(for: key)).tokenExpired)
     }
 
+    func testSubscriptionValidityReloadPrefersCurrentCredentialOverStoredDate() throws {
+        let latest = Date(timeIntervalSince1970: 1_800_000_000)
+        var original = account(id: "subscription-reload")
+        original.expiresAt = latest.addingTimeInterval(-30 * 86_400)
+        original.idToken = jwt(["https://api.openai.com/auth": [
+            "chatgpt_subscription_active_until": ISO8601DateFormatter().string(from: latest)
+        ]])
+        let data = try JSONEncoder().encode(original)
+        let restored = try JSONDecoder().decode(TokenAccount.self, from: data)
+        XCTAssertEqual(restored.expiresAt, latest)
+    }
+
+    func testSubscriptionValidityRefreshUpdatesAndMissingClaimPreservesLastKnownDate() throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        let key = try fixture.store.commitOAuthAccount(account(id: "subscription-refresh"))
+        let latest = Date(timeIntervalSince1970: 1_800_000_000)
+        for token in [jwt(["https://api.openai.com/auth": [
+            "chatgpt_subscription_active_until": ISO8601DateFormatter().string(from: latest)
+        ]]), jwt(["exp": 1_900_000_000])] {
+            let snapshot = try XCTUnwrap(fixture.store.snapshot(for: key))
+            let result = try fixture.store.commitRefreshedCredentials(
+                AccountCredentials(accessToken: "new-access", refreshToken: "new-refresh",
+                                   idToken: token, accessTokenExpiresAt: nil),
+                to: key, ifCurrent: snapshot.revision)
+            XCTAssertEqual(result, .applied)
+            XCTAssertEqual(fixture.store.account(for: key)?.expiresAt, latest)
+        }
+        XCTAssertNil(AccountBuilder.subscriptionActiveUntil(idToken: jwt(["exp": 1_900_000_000])))
+    }
+
     func testAccessTokenExpiryIsIndependentFromSubscriptionExpiry() throws {
         let accessExpiration = Date().addingTimeInterval(3_600)
         let subscriptionExpiration = Date().addingTimeInterval(30 * 24 * 3_600)
@@ -827,6 +858,212 @@ final class AccountRefreshRaceTests: XCTestCase {
         let current = try XCTUnwrap(fixture.store.account(for: key))
         XCTAssertEqual(current.idToken, "id-existing")
         XCTAssertEqual(current.accessToken, "access-rotated")
+    }
+
+    func testCodexUsernamePersistsAndProfileIsCachedWithoutBlockingQuotas() async throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        let key = try fixture.store.commitOAuthAccount(account())
+        let client = ControlledHTTPDataClient()
+        configureOptionalWhamResponses(client)
+        client.respond(path: usagePath, status: 200, data: usageData(percent: 31))
+        let path = "/backend-api/wham/profiles/me"
+        client.respond(path: path, status: 200,
+                       data: Data(#"{"profile":{"username":" iamzjt ","display_name":"User"}}"#.utf8))
+        let service = WhamService(httpClient: client)
+        await service.refreshOne(key: key, store: fixture.store)
+        XCTAssertEqual(fixture.store.account(for: key)?.displayName, "@iamzjt")
+        await service.refreshOne(key: key, store: fixture.store)
+        XCTAssertEqual(client.requestCount(path: path), 1)
+        XCTAssertEqual(client.requestCount(path: usagePath), 2)
+        let reloaded = TokenStore(poolURL: fixture.poolURL, authURL: fixture.authURL)
+        XCTAssertEqual(reloaded.accounts.first?.displayName, "@iamzjt")
+    }
+
+    func testSlowProfileDoesNotBlockQuotaCommitAndCannotOverwriteReauthorization() async throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        let key = try fixture.store.commitOAuthAccount(account())
+        let client = ControlledHTTPDataClient()
+        configureOptionalWhamResponses(client)
+        client.respond(path: usagePath, status: 200, data: usageData(percent: 44))
+        let path = "/backend-api/wham/profiles/me"
+        client.suspend(path: path)
+        let service = WhamService(httpClient: client)
+        let request = Task { await service.refreshOne(key: key, store: fixture.store) }
+        await client.waitUntilRequested(path: path)
+        for _ in 0..<100 where fixture.store.account(for: key)?.weeklyUsedPercent != 44 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(fixture.store.account(for: key)?.weeklyUsedPercent, 44)
+        _ = try fixture.store.commitOAuthAccount(account(access: "new-access", refresh: "new-refresh"), replacing: key)
+        client.resolveNext(path: path, status: 200,
+                           data: Data(#"{"profile":{"username":"old-user"}}"#.utf8))
+        await request.value
+        XCTAssertNil(fixture.store.account(for: key)?.codexProfile)
+    }
+
+    func testProfileFailurePreservesKnownNameAndDoesNotExpireAccount() async throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        var initial = account()
+        initial.codexProfile = CodexAccountProfile(username: "known", displayName: nil,
+                                                   checkedAt: Date().addingTimeInterval(-7200))
+        let key = try fixture.store.commitOAuthAccount(initial)
+        let client = ControlledHTTPDataClient()
+        configureOptionalWhamResponses(client)
+        client.respond(path: usagePath, status: 200, data: usageData(percent: 20))
+        let path = "/backend-api/wham/profiles/me"
+        client.respond(path: path, status: 401, data: Data())
+        let service = WhamService(httpClient: client)
+        await service.refreshOne(key: key, store: fixture.store)
+        await service.refreshOne(key: key, store: fixture.store)
+        XCTAssertEqual(fixture.store.account(for: key)?.displayName, "@known")
+        XCTAssertEqual(fixture.store.account(for: key)?.tokenExpired, false)
+        XCTAssertEqual(client.requestCount(path: path), 1, "Failed optional reads should back off")
+    }
+
+    func testProfileParsingAndLegacyAccountFallbackNeverInventAUsername() throws {
+        let date = Date()
+        XCTAssertNil(CodexAccountProfile.parse(Data(#"{"profile":{"username":17}}"#.utf8), checkedAt: date))
+        XCTAssertNil(CodexAccountProfile.parse(Data(#"{"error":"unavailable"}"#.utf8), checkedAt: date))
+        let empty = try XCTUnwrap(CodexAccountProfile.parse(
+            Data(#"{"profile":{"username":null,"display_name":" "}}"#.utf8), checkedAt: date))
+        var legacy = account()
+        legacy.organizationName = "user-internal-id"
+        XCTAssertEqual(legacy.displayName, "person@example.com")
+        legacy.codexProfile = empty
+        XCTAssertEqual(legacy.displayName, "person@example.com")
+        legacy.codexProfile = CodexAccountProfile(username: nil, displayName: "Actual name", checkedAt: date)
+        XCTAssertEqual(legacy.displayName, "Actual name")
+        let data = try JSONEncoder().encode(account())
+        XCTAssertNil(try JSONDecoder().decode(TokenAccount.self, from: data).codexProfile)
+    }
+
+    func testSubscriptionEndpointUsesWorkspaceAndActualBillingFields() async throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        let key = try fixture.store.commitOAuthAccount(account())
+        let snapshot = try XCTUnwrap(fixture.store.snapshot(for: key))
+        let client = ControlledHTTPDataClient()
+        configureOptionalWhamResponses(client)
+        client.respond(path: usagePath, status: 200, data: usageData(percent: 31))
+        client.respond(path: "/backend-api/subscriptions", status: 200, data: subscriptionData())
+        let checkedAt = Date(timeIntervalSince1970: 1_789_200_000)
+        let service = WhamService(httpClient: client, now: { checkedAt })
+
+        await service.refreshOne(key: key, store: fixture.store)
+
+        let current = try XCTUnwrap(fixture.store.account(for: key))
+        let billing = try XCTUnwrap(current.subscriptionBilling)
+        XCTAssertEqual(billing.activeUntil, ISO8601DateFormatter().date(from: "2026-10-07T03:51:24Z"))
+        XCTAssertEqual(billing.willRenew, true)
+        XCTAssertEqual(billing.checkedAt, checkedAt)
+        XCTAssertFalse(current.subscriptionRefreshFailed)
+        XCTAssertEqual(current.weeklyUsedPercent, 31)
+        let request = try XCTUnwrap(client.lastRequest(path: "/backend-api/subscriptions"))
+        XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems,
+                       [URLQueryItem(name: "account_id", value: snapshot.chatgptAccountId)])
+        XCTAssertEqual(request.value(forHTTPHeaderField: "ChatGPT-Account-ID"), snapshot.chatgptAccountId)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-old")
+        await service.refreshOne(key: key, store: fixture.store)
+        XCTAssertEqual(client.requestCount(path: "/backend-api/subscriptions"), 1)
+        await service.refreshOne(key: key, store: fixture.store, forceSubscriptionRefresh: true)
+        XCTAssertEqual(client.requestCount(path: "/backend-api/subscriptions"), 2)
+    }
+
+    func testSubscriptionParsingDoesNotSubstituteOtherExpirationFields() throws {
+        let now = Date()
+        let cancelled = try XCTUnwrap(SubscriptionBilling.parse(subscriptionData(renew: false,
+            date: "2026-10-07T03:51:24.123Z"), checkedAt: now))
+        XCTAssertEqual(cancelled.willRenew, false)
+        XCTAssertEqual(try XCTUnwrap(cancelled.activeUntil).timeIntervalSince1970.truncatingRemainder(dividingBy: 1),
+                       0.123, accuracy: 0.001)
+        XCTAssertNil(SubscriptionBilling.parse(Data("{}".utf8), checkedAt: now))
+        XCTAssertNil(SubscriptionBilling.parse(subscriptionData(date: "invalid"), checkedAt: now))
+        let noDate = Data(#"{"id":"sub-test","plan_type":"pro","active_until":null,"expires_at":"2026-10-07T09:51:24Z","will_renew":false}"#.utf8)
+        XCTAssertNil(try XCTUnwrap(SubscriptionBilling.parse(noDate, checkedAt: now)).activeUntil)
+    }
+
+    func testSubscriptionFailuresPreserveVerifiedCacheAndAccountAvailability() async throws {
+        for status in [200, 401, 403, 500] {
+            let fixture = try AccountStoreFixture()
+            defer { fixture.remove() }
+            var initial = account()
+            let cached = SubscriptionBilling(activeUntil: Date().addingTimeInterval(86_400),
+                                             willRenew: true, checkedAt: Date().addingTimeInterval(-7200))
+            initial.subscriptionBilling = cached
+            let key = try fixture.store.commitOAuthAccount(initial)
+            let client = ControlledHTTPDataClient()
+            configureOptionalWhamResponses(client)
+            client.respond(path: usagePath, status: 200, data: usageData(percent: 32))
+            client.respond(path: "/backend-api/subscriptions", status: status, data: Data("<html>challenge</html>".utf8))
+            let service = WhamService(httpClient: client)
+            await service.refreshOne(key: key, store: fixture.store)
+            let current = try XCTUnwrap(fixture.store.account(for: key))
+            XCTAssertEqual(current.subscriptionBilling, cached)
+            XCTAssertTrue(current.subscriptionRefreshFailed)
+            XCTAssertTrue(current.isAvailable)
+            XCTAssertFalse(current.authorizationInvalidConfirmed)
+            XCTAssertEqual(current.weeklyUsedPercent, 32)
+            await service.refreshOne(key: key, store: fixture.store)
+            XCTAssertEqual(client.requestCount(path: "/backend-api/subscriptions"), 1)
+        }
+    }
+
+    func testLateSubscriptionResponseCannotOverwriteReauthorizedAccount() async throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        let key = try fixture.store.commitOAuthAccount(account())
+        let client = ControlledHTTPDataClient()
+        configureOptionalWhamResponses(client)
+        client.respond(path: usagePath, status: 200, data: usageData(percent: 31))
+        client.suspend(path: "/backend-api/subscriptions")
+        let service = WhamService(httpClient: client)
+        let task = Task { await service.refreshOne(key: key, store: fixture.store) }
+        await client.waitUntilRequested(path: "/backend-api/subscriptions")
+        _ = try fixture.store.commitOAuthAccount(account(access: "new-access"), replacing: key)
+        client.resolveNext(path: "/backend-api/subscriptions", status: 200, data: subscriptionData())
+        await task.value
+        XCTAssertNil(fixture.store.account(for: key)?.subscriptionBilling)
+        XCTAssertFalse(try XCTUnwrap(fixture.store.account(for: key)).subscriptionRefreshFailed)
+    }
+
+    func testBillingSnapshotSurvivesCredentialRotationAndPoolReload() throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        var initial = account()
+        let billing = try XCTUnwrap(SubscriptionBilling.parse(subscriptionData(), checkedAt: Date()))
+        initial.subscriptionBilling = billing
+        let key = try fixture.store.commitOAuthAccount(initial)
+        let snapshot = try XCTUnwrap(fixture.store.snapshot(for: key))
+        _ = try fixture.store.commitRefreshedCredentials(
+            AccountCredentials(accessToken: "rotated", refreshToken: "rotated-refresh",
+                idToken: jwt(["https://api.openai.com/auth": ["chatgpt_subscription_active_until": "2026-09-19T00:00:00Z"]]),
+                accessTokenExpiresAt: Date()), to: key, ifCurrent: snapshot.revision)
+        let current = try XCTUnwrap(fixture.store.account(for: key))
+        let restored = try JSONDecoder().decode(TokenAccount.self, from: JSONEncoder().encode(current))
+        XCTAssertEqual(restored.subscriptionBilling, billing)
+        XCTAssertNotEqual(restored.subscriptionBilling?.activeUntil, restored.expiresAt)
+        let legacy = try JSONDecoder().decode(TokenAccount.self, from: JSONEncoder().encode(account()))
+        XCTAssertNil(legacy.subscriptionBilling)
+    }
+
+    func testWorkspaceChangeDoesNotReuseAnotherWorkspaceBilling() throws {
+        let fixture = try AccountStoreFixture()
+        defer { fixture.remove() }
+        var initial = account()
+        initial.subscriptionBilling = SubscriptionBilling.parse(subscriptionData(), checkedAt: Date())
+        let key = try fixture.store.commitOAuthAccount(initial)
+        var incoming = account(access: "new-access")
+        incoming.chatgptAccountId = "other-workspace"
+        let updatedKey = try fixture.store.commitOAuthAccount(incoming, replacing: key)
+        XCTAssertNil(fixture.store.account(for: updatedKey)?.subscriptionBilling)
+    }
+
+    private func subscriptionData(renew: Bool = true, date: String = "2026-10-07T03:51:24Z") -> Data {
+        try! JSONSerialization.data(withJSONObject: ["id": "sub-test", "plan_type": "pro",
+            "active_until": date, "will_renew": renew, "expires_at": "2026-10-07T09:51:24Z"])
     }
 
     private func configureOptionalWhamResponses(_ client: ControlledHTTPDataClient) {
@@ -926,6 +1163,8 @@ private final class ControlledHTTPDataClient: HTTPDataClient {
     private var suspendedPaths: Set<String> = []
     private var pending: [String: [CheckedContinuation<(Data, URLResponse), Error>]] = [:]
     private var counts: [String: Int] = [:]
+    private var requests: [String: URLRequest] = [:]
+    func lastRequest(path: String) -> URLRequest? { requests[path] }
     private var requestWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
 
     func respond(path: String, status: Int, data: Data) {
@@ -967,6 +1206,7 @@ private final class ControlledHTTPDataClient: HTTPDataClient {
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         let path = request.url?.path ?? ""
         counts[path, default: 0] += 1
+        requests[path] = request
         let waiters = requestWaiters.removeValue(forKey: path) ?? []
         waiters.forEach { $0.resume() }
 
