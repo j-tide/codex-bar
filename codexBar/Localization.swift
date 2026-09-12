@@ -25,8 +25,13 @@ final class LanguageSettings: ObservableObject {
     }
 
     func cycle() {
-        override.toggle()
-        L.languageOverride = override
+        selectChinese(!override)
+    }
+
+    func selectChinese(_ selected: Bool) {
+        guard override != selected else { return }
+        L.languageOverride = selected
+        override = selected
     }
 }
 
