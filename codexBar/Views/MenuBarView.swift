@@ -103,10 +103,16 @@ struct MenuBarView: View {
     private var panel: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if let completion = appUpdater.completedUpdate {
-                AppUpdateCompletedRow(completion: completion) { appUpdater.dismissCompletedUpdate() }
+            if appUpdater.completedUpdate != nil || appUpdater.shouldShowUpdateRow {
+                VStack(spacing: 8) {
+                    if let completion = appUpdater.completedUpdate {
+                        AppUpdateCompletedRow(completion: completion) { appUpdater.dismissCompletedUpdate() }
+                    }
+                    if appUpdater.shouldShowUpdateRow { AppUpdateRow(updater: appUpdater) }
+                }
+                .padding(.horizontal, PopupSpacing.section)
+                .padding(.vertical, PopupSpacing.regular)
             }
-            if appUpdater.shouldShowUpdateRow { AppUpdateRow(updater: appUpdater) }
             Divider()
                 .overlay { HeaderRefreshSweep(isRefreshing: isRefreshing) }
             HStack(alignment: .top, spacing: 0) {
@@ -662,256 +668,31 @@ private struct AppUpdateRow: View {
     @EnvironmentObject private var language: LanguageSettings
     @ObservedObject var updater: AppUpdateService
 
-    private var iconName: String {
-        switch updater.state {
-        case .checking:
-            return "arrow.triangle.2.circlepath"
-        case .available:
-            return "arrow.down.circle.fill"
-        case .downloading:
-            return "arrow.down.circle"
-        case .readyToInstall:
-            return "checkmark.circle.fill"
-        case .installing:
-            return "shippingbox.circle.fill"
-        case .upToDate:
-            return "checkmark.circle.fill"
-        case .failed:
-            return "exclamationmark.triangle.fill"
-        case .idle:
-            return "arrow.triangle.2.circlepath"
-        }
-    }
-
-    private var iconColor: Color {
-        switch updater.state {
-        case .available:
-            return CodexStatusPalette.brightWarning
-        case .downloading, .checking, .installing:
-            return .secondary
-        case .readyToInstall, .upToDate:
-            return CodexStatusPalette.ok
-        case .failed:
-            return CodexStatusPalette.warning
-        case .idle:
-            return .secondary
-        }
-    }
-
-    private var title: String {
-        switch updater.state {
-        case .checking:
-            return L.updateChecking
-        case .available(let release):
-            return L.updateAvailableTitle(release.tagName)
-        case .downloading:
-            return L.updateDownloading
-        case .readyToInstall:
-            return L.updateReadyToInstall
-        case .installing:
-            return L.updateInstalling
-        case .upToDate:
-            return L.updateUpToDate
-        case .failed:
-            return L.updateFailedTitle
-        case .idle:
-            return L.checkForUpdates
-        }
-    }
-
-    private var detail: String {
-        switch updater.state {
-        case .available(let release):
-            return L.updateAvailableDetail(release.displayName, formattedSize(release.assetSize))
-        case .downloading(let release):
-            return L.updateDownloadingDetail(Int(updater.downloadProgress * 100), formattedSize(release.assetSize))
-        case .readyToInstall(let release):
-            return L.updateReadyToInstallDetail(release.displayName)
-        case .installing:
-            return L.updateInstallingDetail
-        case .failed(let message):
-            return message
-        case .checking:
-            return L.updateCheckingDetail
-        case .upToDate:
-            return L.updateUpToDateDetail
-        case .idle:
-            return ""
-        }
-    }
-
     var body: some View {
         let _ = language.identity
-
-        HStack(alignment: .top, spacing: PopupSpacing.regular) {
-            Image(systemName: iconName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(iconColor)
-                .frame(width: 18, height: 18)
-
-            VStack(alignment: .leading, spacing: PopupSpacing.compact) {
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-
-                if !detail.isEmpty {
-                    Text(detail)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if case .downloading = updater.state {
-                    ProgressView(value: updater.downloadProgress)
-                        .controlSize(.small)
+        AppUpdateStatusCard(
+            content: .state(updater.state, progress: updater.downloadProgress),
+            onPrimary: {
+                Task { @MainActor in
+                    if case .readyToInstall = updater.state {
+                        await updater.installDownloadedUpdate()
+                    } else {
+                        await updater.downloadLatest()
+                    }
                 }
             }
-
-            Spacer(minLength: PopupSpacing.regular)
-
-            if showsPrimaryButton {
-                Button(action: primaryAction) {
-                    Text(primaryButtonTitle)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(primaryButtonForeground)
-                        .padding(.horizontal, PopupSpacing.regular)
-                        .frame(height: 20, alignment: .center)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(primaryButtonBackground)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .strokeBorder(primaryButtonBorder, lineWidth: 0.8)
-                        )
-                }
-                .buttonStyle(.borderless)
-                .focusable(false)
-            }
-        }
-        .padding(.horizontal, PopupSpacing.section)
-        .padding(.vertical, PopupSpacing.regular)
-    }
-
-    private var showsPrimaryButton: Bool {
-        switch updater.state {
-        case .available, .readyToInstall, .failed:
-            return true
-        case .idle, .checking, .upToDate, .downloading, .installing:
-            return false
-        }
-    }
-
-    private var primaryButtonTitle: String {
-        if case .failed = updater.state {
-            return L.retry
-        }
-        if case .readyToInstall = updater.state {
-            return L.installUpdateNow
-        }
-        return L.downloadUpdate
-    }
-
-    private var primaryButtonBackground: Color {
-        if case .available = updater.state {
-            return CodexStatusPalette.brightWarning
-        }
-        if case .readyToInstall = updater.state {
-            return CodexStatusPalette.ok
-        }
-        return CodexStatusPalette.warning.opacity(0.16)
-    }
-
-    private var primaryButtonForeground: Color {
-        if case .available = updater.state {
-            return .white
-        }
-        if case .readyToInstall = updater.state {
-            return .white
-        }
-        return CodexStatusPalette.warning
-    }
-
-    private var primaryButtonBorder: Color {
-        if case .available = updater.state {
-            return CodexStatusPalette.brightWarning.opacity(0.5)
-        }
-        if case .readyToInstall = updater.state {
-            return CodexStatusPalette.ok.opacity(0.45)
-        }
-        return CodexStatusPalette.warning.opacity(0.28)
-    }
-
-    private func primaryAction() {
-        if case .readyToInstall = updater.state {
-            confirmInstall()
-            return
-        }
-
-        Task { @MainActor in
-            await updater.downloadLatest()
-        }
-    }
-
-    private func confirmInstall() {
-        let alert = NSAlert()
-        alert.messageText = L.updateInstallConfirmTitle
-        alert.informativeText = L.updateInstallConfirmInfo
-        alert.addButton(withTitle: L.updateInstallConfirmButton)
-        alert.addButton(withTitle: L.later)
-        guard PopupModalPresenter.run({ alert.runModal() }) == .alertFirstButtonReturn else { return }
-
-        Task { @MainActor in
-            await updater.installDownloadedUpdate()
-        }
-    }
-
-    private func formattedSize(_ size: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        )
     }
 }
 
 private struct AppUpdateCompletedRow: View {
+    @EnvironmentObject private var language: LanguageSettings
     let completion: AppUpdateCompletion
     let dismiss: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: PopupSpacing.regular) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(CodexStatusPalette.ok)
-                .frame(width: 18, height: 18)
-
-            VStack(alignment: .leading, spacing: PopupSpacing.compact) {
-                Text(L.updateInstalledTitle(completion.tagName))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-
-                Text(L.updateInstalledDetail(completion.currentVersion))
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: PopupSpacing.regular)
-
-            Button(action: dismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.borderless)
-            .focusable(false)
-            .help(L.dismissUpdateInstalled)
-        }
-        .padding(.horizontal, PopupSpacing.section)
-        .padding(.vertical, PopupSpacing.regular)
-        .background(CodexStatusPalette.ok.opacity(0.08))
+        let _ = language.identity
+        AppUpdateStatusCard(content: .completed(completion), onDismiss: dismiss)
     }
 }
 

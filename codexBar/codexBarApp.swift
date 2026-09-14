@@ -12,6 +12,13 @@ struct codexBarApp: App {
         // 单元测试会把测试包注入应用进程；此时禁止启动真实刷新、hooks 和更新任务。
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
 
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--update-gallery") {
+            DispatchQueue.main.async { AppUpdateGalleryWindow.show() }
+            return
+        }
+        #endif
+
         TokenStore.shared.startMonitoringActiveAuthFile()
         // App 级后台续期，脱离菜单 View 生命周期（菜单关闭时 View 不存在，其内 Timer 不跑）
         BackgroundRefresher.shared.start(interval: RefreshFrequencySettings.shared.selection.backgroundInterval)
