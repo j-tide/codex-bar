@@ -43,8 +43,19 @@ struct codexBarApp: App {
 @MainActor
 private final class CallbackApplicationDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
+        if let route = urls.first(where: {
+            $0.scheme == "codexappbar" && $0.host == "notification"
+        }) {
+            if route.path == "/task" { CodexApplicationActivator.activate() }
+            else { AppStatusBarController.shared.openFromCallback() }
+            return
+        }
         guard urls.contains(where: OAuthCallbackPage.isReturnURL) else { return }
         AppStatusBarController.shared.openFromCallback()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        NotificationBridge.shared.stop()
     }
 }
 
@@ -141,38 +152,22 @@ private final class AppStatusBarController: NSObject {
                 await service.refreshAuthorizationStatusNow()
                 Logger(subsystem: Bundle.main.bundleIdentifier ?? "codexbar", category: "TaskNotifications")
                     .notice("Notification status check: enabled=\(service.isEnabled), status=\(service.authorizationStatus.rawValue)")
-                let center = UNUserNotificationCenter.current()
-                let settings = await center.notificationSettings()
-                Logger(subsystem: Bundle.main.bundleIdentifier ?? "codexbar", category: "TaskNotifications")
-                    .notice("Notification presentation: alerts=\(settings.alertSetting.rawValue), style=\(settings.alertStyle.rawValue), sound=\(settings.soundSetting.rawValue)")
-                var diagnosticID: String?
-                if ProcessInfo.processInfo.arguments.contains("--test-task-notification"), service.isEnabled {
+                if ProcessInfo.processInfo.arguments.contains("--test-task-notification") {
                     let id = SystemTaskNotificationClient.identifierPrefix + "diagnostic-" + UUID().uuidString
                     let content = UNMutableNotificationContent()
                     content.title = L.zh ? "CodexAppBar 通知测试" : "CodexAppBar notification test"
-                    content.body = L.zh ? "这是一条测试提醒，用于确认系统通知可以正常接收。" : "This test checks that macOS can receive notifications from CodexAppBar."
+                    content.body = L.zh ? "看到绿色图标即表示新通知通道生效。" : "A green icon confirms that the new notification channel is active."
                     content.sound = .default
-                    do {
-                        try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
-                        diagnosticID = id
-                    } catch {
+                    NotificationBridge.shared.add(
+                        UNNotificationRequest(identifier: id, content: content, trigger: nil),
+                        route: "app"
+                    ) { error in
+                        let received = error == nil
+                        let detail = error?.localizedDescription ?? "accepted"
                         Logger(subsystem: Bundle.main.bundleIdentifier ?? "codexbar", category: "TaskNotifications")
-                            .error("Diagnostic notification rejected: \(error.localizedDescription, privacy: .public)")
+                            .notice("Diagnostic notification accepted: \(received), detail=\(detail, privacy: .public)")
                     }
                 }
-                try? await Task.sleep(for: .seconds(3))
-                let delivered = await center.deliveredNotifications()
-                if let diagnosticID {
-                    let received = delivered.contains { $0.request.identifier == diagnosticID }
-                    Logger(subsystem: Bundle.main.bundleIdentifier ?? "codexbar", category: "TaskNotifications")
-                        .notice("Diagnostic notification delivered: \(received)")
-                }
-                let completedCount = delivered.filter {
-                    $0.request.identifier.hasPrefix(SystemTaskNotificationClient.identifierPrefix)
-                        && $0.request.content.title == L.taskCompletedNotificationTitle
-                }.count
-                Logger(subsystem: Bundle.main.bundleIdentifier ?? "codexbar", category: "TaskNotifications")
-                    .notice("Delivered completion notifications: \(completedCount)")
             }
         }
         if ProcessInfo.processInfo.arguments.contains("--request-notification-permission") {
@@ -414,7 +409,7 @@ private final class AppStatusBarController: NSObject {
                 NSApplication.shared.activate(ignoringOtherApps: true)
                 let alert = NSAlert()
                 alert.messageText = L.zh ? "无法打开通知设置" : "Could not open Notification Settings"
-                alert.informativeText = L.zh ? "请从苹果菜单打开系统设置，在“通知”中找到 CodexAppBar。" : "Open System Settings from the Apple menu, then find CodexAppBar under Notifications."
+                alert.informativeText = L.zh ? "请打开系统设置 → 通知，找到绿色图标的 CodexAppBar。" : "Open System Settings → Notifications and find CodexAppBar with the green icon."
                 PopupModalPresenter.run { alert.runModal() }
             }
         }

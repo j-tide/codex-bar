@@ -54,6 +54,7 @@ final class AppUpdateService: ObservableObject {
     private var clearTransientTask: Task<Void, Never>?
     private var stagedUpdate: (release: AppUpdateRelease, appURL: URL)?
     private var hasStarted = false
+    private var notificationTagsInFlight: Set<String> = []
 
     private init() {}
 
@@ -588,42 +589,44 @@ final class AppUpdateService: ObservableObject {
 
     private func notifyIfNeeded(for release: AppUpdateRelease) {
         let key = "codexbar.lastNotifiedUpdateTag"
-        guard defaults.string(forKey: key) != release.tagName else { return }
-        defaults.set(release.tagName, forKey: key)
+        let requestID = "codexbar-update-\(release.tagName)"
+        guard defaults.string(forKey: key) != release.tagName,
+              notificationTagsInFlight.insert(requestID).inserted else { return }
 
         let content = UNMutableNotificationContent()
         content.title = L.updateNotificationTitle
         content.body = L.updateNotificationBody(release.displayName)
         content.sound = .default
 
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return }
-            let request = UNNotificationRequest(
-                identifier: "codexbar-update-\(release.tagName)",
-                content: content,
-                trigger: nil
-            )
-            UNUserNotificationCenter.current().add(request)
+        let request = UNNotificationRequest(identifier: requestID, content: content, trigger: nil)
+        NotificationBridge.shared.add(request, route: "app") { [weak self] error in
+            Task { @MainActor in
+                guard let self else { return }
+                self.notificationTagsInFlight.remove(requestID)
+                if error == nil { self.defaults.set(release.tagName, forKey: key) }
+            }
         }
     }
 
     private func notifyCompletedInstallIfNeeded(_ completion: AppUpdateCompletion) {
-        guard defaults.string(forKey: Self.pendingInstallNotifiedKey) != completion.tagName else { return }
-        defaults.set(completion.tagName, forKey: Self.pendingInstallNotifiedKey)
+        let requestID = "codexbar-update-installed-\(completion.tagName)"
+        guard defaults.string(forKey: Self.pendingInstallNotifiedKey) != completion.tagName,
+              notificationTagsInFlight.insert(requestID).inserted else { return }
 
         let content = UNMutableNotificationContent()
         content.title = L.updateInstalledNotificationTitle
         content.body = L.updateInstalledNotificationBody(completion.tagName)
         content.sound = .default
 
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return }
-            let request = UNNotificationRequest(
-                identifier: "codexbar-update-installed-\(completion.tagName)",
-                content: content,
-                trigger: nil
-            )
-            UNUserNotificationCenter.current().add(request)
+        let request = UNNotificationRequest(identifier: requestID, content: content, trigger: nil)
+        NotificationBridge.shared.add(request, route: "app") { [weak self] error in
+            Task { @MainActor in
+                guard let self else { return }
+                self.notificationTagsInFlight.remove(requestID)
+                if error == nil {
+                    self.defaults.set(completion.tagName, forKey: Self.pendingInstallNotifiedKey)
+                }
+            }
         }
     }
 

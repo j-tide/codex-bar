@@ -391,6 +391,24 @@ final class TaskCenterCoreTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(client.requests.count, 1)
+        XCTAssertEqual(client.requests.first?.content.title, L.taskPermissionNotificationTitle)
+        XCTAssertEqual(client.requests.first?.content.body, L.taskPermissionNotificationBody)
+    }
+
+    func testWaitingForInputUsesReplyPrompt() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        let client = MockTaskNotificationClient(status: .authorized, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults)
+        let enabled = await service.enable()
+        XCTAssertTrue(enabled)
+        let waiting = record(key: "reply-needed", state: .needsAttention, phase: .waitingInput, age: 0)
+
+        service.process(snapshot: TaskCenterSnapshot(records: [waiting], now: fixedNow))
+
+        XCTAssertEqual(client.requests.count, 1)
+        XCTAssertEqual(client.requests.first?.content.title, L.taskInputNotificationTitle)
+        XCTAssertEqual(client.requests.first?.content.body, L.taskInputNotificationBody)
     }
 
     func testNotificationDedupeIsPersistedBeforeSchedulingCompletes() async throws {
@@ -514,6 +532,19 @@ final class TaskCenterCoreTests: XCTestCase {
         XCTAssertTrue(enabled)
         XCTAssertEqual(client.authorizationRequestCount, 1)
         XCTAssertEqual(service.authorizationStatus, .authorized)
+    }
+
+    func testExistingOptInRequestsPermissionForNewNotificationIdentity() async throws {
+        let fixture = try DefaultsFixture()
+        defer { fixture.remove() }
+        fixture.defaults.set(true, forKey: "codexbar.taskAttentionNotificationsEnabled")
+        let client = MockTaskNotificationClient(status: .notDetermined, requestGranted: true)
+        let service = TaskNotificationService(notificationClient: client, defaults: fixture.defaults)
+
+        await service.refreshAuthorizationStatusNow()
+
+        XCTAssertTrue(service.isEnabled)
+        XCTAssertEqual(client.authorizationRequestCount, 1)
     }
 
     func testDeniedNotificationPermissionDoesNotEnableService() async throws {

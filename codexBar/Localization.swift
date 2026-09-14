@@ -130,16 +130,24 @@ enum L {
     }
     static var taskAttentionNotificationPermissionDenied: String {
         zh
-            ? "通知未启用。若已拒绝系统权限，请前往系统设置允许 CodexAppBar 通知。"
-            : "Notifications were not enabled. If permission was denied, allow CodexAppBar notifications in System Settings."
+            ? "通知未启用。请在系统设置中允许绿色图标的 CodexAppBar 发送通知。"
+            : "Notifications are off. In System Settings, allow notifications for CodexAppBar with the green icon."
     }
     static var taskAttentionNotificationTitle: String { zh ? "Codex 需要处理" : "Codex needs attention" }
     static var taskCompletedNotificationTitle: String { zh ? "Codex 任务已完成" : "Codex task completed" }
     static var taskCompletedNotificationBody: String {
-        zh ? "有一项 Codex 任务已完成，等待你查看。" : "A Codex task has finished and is ready to review."
+        zh ? "任务已完成，点按查看结果。" : "The task is complete. Click to review the result."
     }
     static var taskAttentionNotificationBody: String {
-        zh ? "有一项 Codex 任务正在等待你的操作。" : "A Codex task is waiting for your action."
+        zh ? "任务需要你处理，点按前往 Codex。" : "The task needs your attention. Click to open Codex."
+    }
+    static var taskPermissionNotificationTitle: String { zh ? "Codex 等待授权" : "Codex is waiting for approval" }
+    static var taskPermissionNotificationBody: String {
+        zh ? "Codex 正在等待你批准操作，点按前往处理。" : "Codex is waiting for your approval. Click to respond."
+    }
+    static var taskInputNotificationTitle: String { zh ? "Codex 等待回复" : "Codex is waiting for a reply" }
+    static var taskInputNotificationBody: String {
+        zh ? "Codex 需要你的输入才能继续，点按前往回复。" : "Codex needs your input to continue. Click to reply."
     }
 
     static func taskStatusSummary(needsAttention: Int, running: Int) -> String {
@@ -267,7 +275,7 @@ enum L {
         zh ? "CodexAppBar 有新版本" : "CodexAppBar update available"
     }
     static func updateNotificationBody(_ name: String) -> String {
-        zh ? "\(name) 已发布，打开菜单即可更新。" : "\(name) is available. Open the menu to update."
+        zh ? "\(name) 已发布，点按打开菜单并安装。" : "\(name) is available. Click to open the menu and install it."
     }
     static func updateInstalledTitle(_ version: String) -> String {
         zh ? "已更新到 \(version)" : "Updated to \(version)"
@@ -279,10 +287,10 @@ enum L {
         zh ? "关闭更新完成提示" : "Dismiss update completed"
     }
     static var updateInstalledNotificationTitle: String {
-        zh ? "CodexAppBar 已更新" : "CodexAppBar updated"
+        zh ? "CodexAppBar 更新完成" : "CodexAppBar update complete"
     }
     static func updateInstalledNotificationBody(_ version: String) -> String {
-        zh ? "已成功更新到 \(version)。" : "Successfully updated to \(version)."
+        zh ? "已升级至 \(version)。" : "Updated to \(version)."
     }
     static var updateErrorInvalidResponse: String {
         zh ? "GitHub 返回内容不可识别" : "GitHub returned an unrecognized response"

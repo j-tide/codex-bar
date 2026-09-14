@@ -11,60 +11,24 @@ protocol TaskNotificationClient: AnyObject {
     func setResponseHandler(_ handler: @escaping () -> Void)
 }
 
-final class SystemTaskNotificationClient: NSObject, TaskNotificationClient, UNUserNotificationCenterDelegate {
-    private let center: UNUserNotificationCenter
-    private var responseHandler: (() -> Void)?
-
-    init(center: UNUserNotificationCenter = .current()) {
-        self.center = center
-        super.init()
-    }
+final class SystemTaskNotificationClient: TaskNotificationClient {
+    private let bridge = NotificationBridge.shared
 
     func authorizationStatus(completion: @escaping (UNAuthorizationStatus) -> Void) {
-        center.getNotificationSettings { settings in
-            completion(settings.authorizationStatus)
-        }
+        bridge.authorizationStatus(completion: completion)
     }
 
     func requestAuthorization(completion: @escaping (Result<Bool, Error>) -> Void) {
-        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
-            if let error { completion(.failure(error)) }
-            else { completion(.success(granted)) }
-        }
+        bridge.requestAuthorization(completion: completion)
     }
 
     func add(_ request: UNNotificationRequest, completion: @escaping (Error?) -> Void) {
-        center.add(request, withCompletionHandler: completion)
+        bridge.add(request, route: "task", completion: completion)
     }
 
     func setResponseHandler(_ handler: @escaping () -> Void) {
-        responseHandler = handler
-        center.delegate = self
-    }
-
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        guard notification.request.identifier.hasPrefix(Self.identifierPrefix) else {
-            completionHandler([])
-            return
-        }
-        completionHandler([.banner, .sound])
-    }
-
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
-        guard response.notification.request.identifier.hasPrefix(Self.identifierPrefix) else {
-            completionHandler()
-            return
-        }
-        responseHandler?()
-        completionHandler()
+        // The helper routes notification clicks through the app's URL callback.
+        _ = handler
     }
 
     static let identifierPrefix = "codexbar-task-attention-"
@@ -145,6 +109,13 @@ final class TaskNotificationService: ObservableObject {
             Task { @MainActor in
                 guard let self, !self.isUpdatingAuthorization,
                       self.authorizationRevision == revision else { return }
+                if status == .notDetermined,
+                   self.defaults.bool(forKey: Self.enabledDefaultsKey) {
+                    // Existing opt-in belongs to the old app identity. Ask macOS
+                    // once for the new notification helper after an update.
+                    _ = await self.enable()
+                    return
+                }
                 self.applyAuthorizationStatus(status)
             }
         }
@@ -156,6 +127,10 @@ final class TaskNotificationService: ObservableObject {
         let revision = authorizationRevision
         let status = await currentAuthorizationStatus()
         guard !isUpdatingAuthorization, authorizationRevision == revision else { return }
+        if status == .notDetermined, defaults.bool(forKey: Self.enabledDefaultsKey) {
+            _ = await enable()
+            return
+        }
         applyAuthorizationStatus(status)
     }
 
@@ -356,8 +331,22 @@ final class TaskNotificationService: ObservableObject {
 
     private func notificationRequest(for record: TaskActivityRecord, dedupeKey: String) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
-        content.title = record.state == .ready ? L.taskCompletedNotificationTitle : L.taskAttentionNotificationTitle
-        content.body = record.state == .ready ? L.taskCompletedNotificationBody : L.taskAttentionNotificationBody
+        if record.state == .ready {
+            content.title = L.taskCompletedNotificationTitle
+            content.body = L.taskCompletedNotificationBody
+        } else {
+            switch record.phase {
+            case .awaitingPermission:
+                content.title = L.taskPermissionNotificationTitle
+                content.body = L.taskPermissionNotificationBody
+            case .waitingInput:
+                content.title = L.taskInputNotificationTitle
+                content.body = L.taskInputNotificationBody
+            case .connecting, .processing, .compacting:
+                content.title = L.taskAttentionNotificationTitle
+                content.body = L.taskAttentionNotificationBody
+            }
+        }
         content.sound = .default
         return UNNotificationRequest(
             identifier: SystemTaskNotificationClient.identifierPrefix + dedupeKey,
