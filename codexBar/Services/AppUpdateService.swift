@@ -320,17 +320,7 @@ final class AppUpdateService: ObservableObject {
             throw AppUpdateError.invalidReleaseResponse
         }
 
-        guard let href = Self.firstMatch(
-            in: html,
-            pattern: #"href="([^"]*/releases/download/[^"]*/codexAppBar-[^"]+\.zip)""#
-        ) else {
-            throw AppUpdateError.noInstallableAsset
-        }
-        guard let assetURL = URL(string: href, relativeTo: Self.githubBaseURL)?.absoluteURL else {
-            throw AppUpdateError.invalidReleaseResponse
-        }
-
-        let digest = Self.firstMatch(in: html, pattern: #"(sha256:[a-fA-F0-9]{64})"#)
+        let (assetURL, digest) = try Self.installableWebAsset(in: html)
         let size = await fetchAssetSize(at: assetURL)
         return GitHubReleaseAsset(
             name: assetURL.lastPathComponent,
@@ -338,6 +328,25 @@ final class AppUpdateService: ObservableObject {
             browserDownloadURL: assetURL,
             digest: digest
         )
+    }
+
+    /// GitHub renders one list item per asset. Never pair a ZIP URL with
+    /// a page-wide digest: another asset (such as the DMG) may appear first.
+    static func installableWebAsset(in html: String) throws -> (url: URL, digest: String?) {
+        let rows = try NSRegularExpression(pattern: #"(?is)<li\b[^>]*>.*?</li\s*>"#)
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        for match in rows.matches(in: html, range: range) {
+            guard let rowRange = Range(match.range, in: html) else { continue }
+            let row = String(html[rowRange])
+            guard let href = firstMatch(in: row,
+                pattern: #"href="([^"]*/releases/download/[^"]*/codexAppBar-[^"]+\.zip)""#) else { continue }
+            guard let url = URL(string: href, relativeTo: githubBaseURL)?.absoluteURL else {
+                throw AppUpdateError.invalidReleaseResponse
+            }
+            let digest = firstMatch(in: row, pattern: #"(sha256:[a-fA-F0-9]{64})"#)
+            return (url, digest)
+        }
+        throw AppUpdateError.noInstallableAsset
     }
 
     private func fetchAssetSize(at url: URL) async -> Int64 {
