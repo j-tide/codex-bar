@@ -31,6 +31,9 @@ final class TaskCenterService: ObservableObject {
     private let repository: TaskActivityRepository
     private let now: () -> Date
     private var started = false
+    private let turnActivityReader: CodexTurnActivityReader?
+    private var turnActivityTask: Task<Void, Never>?
+    private var turnActivities: [String: CodexTurnActivity] = [:]
 
     convenience init() {
         self.init(
@@ -38,7 +41,8 @@ final class TaskCenterService: ObservableObject {
             notificationService: TaskNotificationService.shared,
             now: Date.init,
             readState: TaskReadState(defaults: .standard),
-            codexReadState: CodexReadStateMonitor()
+            codexReadState: CodexReadStateMonitor(),
+            turnActivityReader: CodexTurnActivityReader()
         )
     }
 
@@ -47,13 +51,15 @@ final class TaskCenterService: ObservableObject {
         notificationService: TaskNotificationService,
         now: @escaping () -> Date,
         readState: TaskReadState? = nil,
-        codexReadState: CodexReadStateMonitor? = nil
+        codexReadState: CodexReadStateMonitor? = nil,
+        turnActivityReader: CodexTurnActivityReader? = nil
     ) {
         self.readState = readState
         self.codexReadState = codexReadState
         self.repository = repository
         self.notificationService = notificationService
         self.now = now
+        self.turnActivityReader = turnActivityReader
 
         notificationService.onOpenCodex = { [weak self] in
             self?.onRequestOpenCodex?()
@@ -74,10 +80,14 @@ final class TaskCenterService: ObservableObject {
         repository.start { [weak self] result in
             self?.apply(result)
         }
+        startTurnActivityPolling()
     }
 
     func stop() {
         metadataTask?.cancel()
+        turnActivityTask?.cancel()
+        turnActivityTask = nil
+        turnActivities = [:]
         codexReadState?.stop()
         repository.stop()
         started = false
@@ -112,14 +122,34 @@ final class TaskCenterService: ObservableObject {
         apply(lastLoad)
     }
 
+    private func startTurnActivityPolling() {
+        guard let reader = turnActivityReader, turnActivityTask == nil else { return }
+        turnActivityTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let keys = self.map({ Set($0.lastLoad.records.map(\.taskKey)) }) else { return }
+                let paths = await Task.detached(priority: .utility) {
+                    CodexStatsDB.taskRolloutPaths(for: keys)
+                }.value
+                let activities = await reader.activities(paths: paths)
+                guard !Task.isCancelled else { return }
+                if let self, self.turnActivities != activities {
+                    self.turnActivities = activities
+                    self.apply(self.lastLoad)
+                }
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            }
+        }
+    }
+
     private func apply(_ result: TaskActivityLoadResult) {
         let changed = Set(lastLoad.records.map(\.taskKey)) != Set(result.records.map(\.taskKey))
         lastLoad = result
+        let reconciled = result.records.map { turnActivities[$0.taskKey]?.reconciling($0) ?? $0 }
         let visibleRecords = readState?.visibleRecords(
-            from: result.records, knownTaskKeys: Set(metadata.keys),
+            from: reconciled, knownTaskKeys: Set(metadata.keys),
             codexUnreadTaskKeys: codexReadState?.snapshot?.unreadTaskKeys,
             requiresCodexReadState: codexReadState != nil
-        ) ?? result.records
+        ) ?? reconciled
         let snapshot = TaskCenterSnapshot(
             records: visibleRecords,
             now: now(),

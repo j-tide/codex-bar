@@ -126,6 +126,26 @@ struct CodexStatsDB {
         return read(db)
     }
 
+    /// Resolve rollout locations only for tasks already known to the hook bridge.
+    nonisolated static func taskRolloutPaths(for keys: Set<String>) -> [String: String] {
+        guard !keys.isEmpty else { return [:] }
+        return readFromCurrentDB { db in
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db,
+                "SELECT id, rollout_path FROM threads WHERE archived = 0;",
+                -1, &statement, nil) == SQLITE_OK else { return nil }
+            defer { sqlite3_finalize(statement) }
+            var result: [String: String] = [:]
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard let id = sqlite3_column_text(statement, 0),
+                      let path = sqlite3_column_text(statement, 1) else { continue }
+                let key = CodexTaskMetadata.taskKey(for: String(cString: id))
+                if keys.contains(key) { result[key] = String(cString: path) }
+            }
+            return result
+        } ?? [:]
+    }
+
     /// Resolve only the active hook records; titles are never written to hook files or notifications.
     nonisolated static func taskMetadata(for keys: Set<String>) -> [String: CodexTaskMetadata] {
         guard !keys.isEmpty else { return [:] }
