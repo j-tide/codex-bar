@@ -468,7 +468,9 @@ marketing_version="${release_year}.${release_month}.${release_day}"
 public_version="$TAG"
 asset_name="codexAppBar-${public_version}-release.zip"
 asset_path="dist/${asset_name}"
-dmg_name="codexAppBar-${public_version}-release.dmg"
+# Keep the ZIP before the DMG in GitHub's filename ordering. Older clients
+# pair the ZIP URL with the first page digest, so they need ZIP first to upgrade.
+dmg_name="codexAppBar-${public_version}-setup.dmg"
 dmg_path="dist/${dmg_name}"
 app_path="${ARCHIVE_PATH}/${APP_RELATIVE_PATH}"
 
