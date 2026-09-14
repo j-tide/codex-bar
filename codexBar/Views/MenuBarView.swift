@@ -111,7 +111,8 @@ struct MenuBarView: View {
                     if appUpdater.shouldShowUpdateRow { AppUpdateRow(updater: appUpdater) }
                 }
                 .padding(.horizontal, PopupSpacing.section)
-                .padding(.vertical, PopupSpacing.regular)
+                .padding(.top, PopupSpacing.compact)
+                .padding(.bottom, PopupSpacing.section)
             }
             Divider()
                 .overlay { HeaderRefreshSweep(isRefreshing: isRefreshing) }
