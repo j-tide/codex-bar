@@ -39,4 +39,19 @@ final class AppUpdateAssetTests: XCTestCase {
         XCTAssertThrowsError(try AppUpdateService.installableWebAsset(in: row("dmg", digest: dmgHash)))
         XCTAssertThrowsError(try AppUpdateService.installableWebAsset(in: "<html>invalid response</html>"))
     }
+
+    func testCompletedUpdatePromptOnlyMatchesInstalledBuild() {
+        XCTAssertEqual(
+            AppUpdateService.pendingInstallState(build: "20260914.2", tagName: "v2026.09.14.2"),
+            .completed
+        )
+        XCTAssertEqual(
+            AppUpdateService.pendingInstallState(build: "20260914.1", tagName: "v2026.09.14.2"),
+            .waiting
+        )
+        XCTAssertEqual(
+            AppUpdateService.pendingInstallState(build: "20260914.2", tagName: "v2026.09.14.1"),
+            .stale
+        )
+    }
 }

@@ -37,6 +37,12 @@ enum AppUpdateState: Equatable {
 final class AppUpdateService: ObservableObject {
     static let shared = AppUpdateService()
 
+    enum PendingInstallState: Equatable {
+        case waiting
+        case completed
+        case stale
+    }
+
     @Published private(set) var state: AppUpdateState = .idle
     @Published private(set) var downloadProgress: Double = 0
     @Published private(set) var completedUpdate: AppUpdateCompletion?
@@ -212,9 +218,16 @@ final class AppUpdateService: ObservableObject {
 
     private func detectCompletedInstallIfNeeded() {
         guard let tagName = defaults.string(forKey: Self.pendingInstallTagKey),
-              !tagName.isEmpty,
-              Self.isBuild(currentBundleVersion, atLeastReleaseTag: tagName) else {
+              !tagName.isEmpty else { return }
+        switch Self.pendingInstallState(build: currentBundleVersion, tagName: tagName) {
+        case .waiting:
             return
+        case .stale:
+            // A later build must not keep announcing an earlier update.
+            dismissCompletedUpdate()
+            return
+        case .completed:
+            break
         }
 
         let completion = AppUpdateCompletion(
@@ -648,6 +661,14 @@ final class AppUpdateService: ObservableObject {
 
     private static func isBuild(_ build: String, atLeastReleaseTag tagName: String) -> Bool {
         compareVersionComponents(releaseComponents(from: build), releaseComponents(from: tagName)) != .orderedAscending
+    }
+
+    static func pendingInstallState(build: String, tagName: String) -> PendingInstallState {
+        switch compareVersionComponents(releaseComponents(from: build), releaseComponents(from: tagName)) {
+        case .orderedAscending: return .waiting
+        case .orderedSame: return .completed
+        case .orderedDescending: return .stale
+        }
     }
 
     private static func releaseComponents(from value: String) -> [Int] {
