@@ -74,7 +74,6 @@ private final class AppStatusBarController: NSObject {
     private var popover: MenuBarGlassPanel?
     private var cancellables: Set<AnyCancellable> = []
     private var capsuleView: StatusBarCapsuleView?
-    private var lastStatusItemWidth: CGFloat = 0
     private var isRefreshingFromMenu = false
 
     private weak var store: TokenStore?
@@ -337,7 +336,8 @@ private final class AppStatusBarController: NSObject {
     }
 
     private func updateStatusItem() {
-        guard let button = statusItem?.button,
+        guard let statusItem,
+              let button = statusItem.button,
               let capsuleView,
               let store,
               let quotaDisplay,
@@ -345,22 +345,12 @@ private final class AppStatusBarController: NSObject {
               let codexHookInstaller else { return }
         let quotaState = Self.quotaState(from: store, amountMode: quotaDisplay.amountMode)
         let iconName = Self.iconName(from: store)
-        let width = StatusBarCapsuleView.width(
-            for: quotaState,
-            showStatusLights: quotaDisplay.showStatusLights,
-            snapshot: taskCenter.snapshot
-        )
         let light: CodexSessionLight = codexHookInstaller.state.needsAction
             ? .offline
             : taskCenter.snapshot.aggregateLight
 
-        if abs(lastStatusItemWidth - width) > 0.5 {
-            statusItem?.length = width
-            lastStatusItemWidth = width
-        }
-
-        capsuleView.frame = button.bounds
-        capsuleView.configure(
+        capsuleView.update(
+            in: statusItem,
             iconName: iconName,
             quotaState: quotaState,
             light: light,
@@ -484,7 +474,7 @@ private final class AppStatusBarController: NSObject {
     }
 }
 
-private struct StatusBarQuotaState {
+struct StatusBarQuotaState {
     let text: String
     let fiveHourDisplayPercent: Double?
     let fiveHourUsedPercent: Double?
@@ -571,7 +561,7 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     }
 }
 
-private final class StatusBarCapsuleView: NSView {
+final class StatusBarCapsuleView: NSView {
     private static let leftPadding: CGFloat = 0
     private static let rightPadding: CGFloat = 2
     private static let iconSize: CGFloat = 16
@@ -613,6 +603,37 @@ private final class StatusBarCapsuleView: NSView {
         let countsWidth = StatusTaskCountsView.width(for: snapshot)
         let statusLightsWidth = showStatusLights && countsWidth > 0 ? lightGap + countsWidth : 0
         return leftPadding + iconSize + contentGap + contentWidth + statusLightsWidth + rightPadding
+    }
+
+    func update(
+        in item: NSStatusItem,
+        iconName: String,
+        quotaState: StatusBarQuotaState,
+        light: CodexSessionLight,
+        snapshot: TaskCenterSnapshot,
+        showStatusLights: Bool
+    ) {
+        guard let button = item.button else { return }
+        let resizingMask = autoresizingMask
+        autoresizingMask = []
+        defer { autoresizingMask = resizingMask }
+        configure(iconName: iconName, quotaState: quotaState, light: light,
+                  snapshot: snapshot, showStatusLights: showStatusLights)
+        let width = Self.width(for: quotaState, showStatusLights: showStatusLights, snapshot: snapshot)
+
+        // AppKit can snapshot custom status content while changing the item
+        // length. Lay out the new state first, including cleared hidden frames,
+        // and keep autoresizing from applying the width delta a second time.
+        frame = NSRect(x: 0, y: 0, width: width, height: button.bounds.height)
+        layoutSubtreeIfNeeded()
+        // Compare with AppKit's current length, not the last requested width.
+        if abs(item.length - width) > 0.5 || abs(button.bounds.width - width) > 0.5 {
+            item.length = width
+        }
+        frame = button.bounds
+        layoutSubtreeIfNeeded()
+        button.needsDisplay = true
+        button.displayIfNeeded()
     }
 
     func configure(
