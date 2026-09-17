@@ -1,185 +1,266 @@
 <p align="center">
-  <img src="codexBar/Assets.xcassets/AppIcon.appiconset/icon_1024.png" alt="CodexAppBar logo" width="120">
+  <img src="codexBar/Assets.xcassets/AppIcon.appiconset/icon_256.png" width="96" height="96" alt="codex-bar logo">
 </p>
 
-<h1 align="center">CodexAppBar</h1>
+<h1 align="center">codex-bar</h1>
 
 <p align="center">
-  A macOS menu bar companion for Codex users.
-  <br>
-  Manage accounts, monitor quota, inspect model quality, and keep local Codex usage visible.
-</p>
-
-<p align="center">
-  <a href="https://github.com/iamzjt-front-end/codexbar/releases/latest">
-    <img alt="Latest release" src="https://img.shields.io/github/v/release/iamzjt-front-end/codexbar?style=flat-square">
-  </a>
-  <a href="https://github.com/iamzjt-front-end/codexbar/stargazers">
-    <img alt="GitHub stars" src="https://img.shields.io/github/stars/iamzjt-front-end/codexbar?style=flat-square">
-  </a>
-  <a href="https://github.com/iamzjt-front-end/codexbar/blob/main/LICENSE">
-    <img alt="License" src="https://img.shields.io/github/license/iamzjt-front-end/codexbar?style=flat-square">
-  </a>
-  <img alt="macOS" src="https://img.shields.io/badge/macOS-15.6%2B-black?style=flat-square&logo=apple">
+  <strong>Your Codex workspace, at a glance.</strong><br>
+  A native macOS menu bar companion for tasks, accounts, quotas, and token usage.
 </p>
 
 <p align="center">
-  <a href="README.md">简体中文</a>
-  ·
-  <a href="README_EN.md">English</a>
+  <a href="https://github.com/j-tide/codex-bar/releases/latest"><img src="https://img.shields.io/github/v/release/j-tide/codex-bar?style=flat-square&amp;label=release&amp;color=16866a" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-15.6%2B-24292f?style=flat-square&amp;logo=apple&amp;logoColor=white" alt="macOS 15.6 or later">
+  <img src="https://img.shields.io/badge/Swift-SwiftUI-F05138?style=flat-square&amp;logo=swift&amp;logoColor=white" alt="Built with Swift and SwiftUI">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-16866a?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/iamzjt-front-end/codexbar/releases/latest">Download</a>
-  ·
-  <a href="#features">Features</a>
-  ·
-  <a href="#installation">Installation</a>
-  ·
-  <a href="#how-it-works">How it works</a>
-  ·
-  <a href="#star-history">Star History</a>
+  <a href="README.md">简体中文</a> · <strong>English</strong>
 </p>
 
-> [!IMPORTANT]
-> CodexAppBar is an unofficial project. It reads local Codex files and uses ChatGPT/Codex-related private endpoints that may change without notice.
+<p align="center">
+  <a href="https://github.com/j-tide/codex-bar/releases/latest"><strong>Download</strong></a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#development">Development</a> ·
+  <a href="https://github.com/j-tide/codex-bar/issues">Report an issue</a>
+</p>
 
-## English
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/overview-en-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/overview-en-light.png">
+    <img src="docs/assets/overview-en-light.png" width="900" alt="codex-bar two-column panel with task activity, account quotas, a model score matrix, and token usage history">
+  </picture>
+</p>
 
-CodexAppBar is a macOS menu bar companion for Codex users. It brings account management, quota monitoring, Codex session status, model quality, and local token usage into a lightweight popover.
+<p align="center">
+  <sub>Native interface · Light and dark themes · English and Chinese<br>Preview images use sample accounts, tasks, usage, and scores.</sub>
+</p>
+
+## Fewer windows. More focus.
+
+When several Codex tasks are running, you need to know which ones are working, which need your attention, and how much quota is left. codex-bar keeps that information in your menu bar. Open the panel to revisit a task, switch accounts, compare model scores, or review usage on this Mac. No separate server to set up.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Keep up with every task</h3>
+      <p>See running, needs-attention, and completed-unread states with their counts. Browse tasks in Codex sidebar order and click to return to a conversation.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Know your available quota</h3>
+      <p>Keep the current account in view and switch to a backup when needed. Check quota, reset times, subscription status, and available reset credits together.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>Compare model scores</h3>
+      <p>Explore Codex Radar scores by model and reasoning effort. The top three entries stand out; hover for precise values and ranking details.</p>
+    </td>
+    <td valign="top">
+      <h3>Understand your usage</h3>
+      <p>Review daily, weekly, and monthly token totals and session counts, with a 30-day curve and a 16-week heatmap of Codex activity on this Mac.</p>
+    </td>
+  </tr>
+</table>
 
 ## Screenshots
 
-<p align="center">
-  <img src="en.png" alt="CodexAppBar English interface" width="420">
-</p>
+Switch between English and Chinese, and between light and dark themes, directly in the app. Click any screenshot to view it at full size.
+
+<table>
+  <tr>
+    <th width="50%">English · Light</th>
+    <th width="50%">English · Dark</th>
+  </tr>
+  <tr>
+    <td><a href="docs/assets/overview-en-light.png"><img src="docs/assets/overview-en-light.png" width="440" alt="English light theme with task activity, account quotas, model scores, and local usage"></a></td>
+    <td><a href="docs/assets/overview-en-dark.png"><img src="docs/assets/overview-en-dark.png" width="440" alt="English dark theme with task activity, account quotas, model scores, and local usage"></a></td>
+  </tr>
+  <tr>
+    <th>简体中文 · 浅色</th>
+    <th>简体中文 · 深色</th>
+  </tr>
+  <tr>
+    <td><a href="docs/assets/overview-zh-light.png"><img src="docs/assets/overview-zh-light.png" width="440" alt="Chinese light theme with task activity, account quotas, model scores, and local usage"></a></td>
+    <td><a href="docs/assets/overview-zh-dark.png"><img src="docs/assets/overview-zh-dark.png" width="440" alt="Chinese dark theme with task activity, account quotas, model scores, and local usage"></a></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Captured from the native app with sample data. Accounts, tasks, usage, and model scores are for demonstration only.</sub></p>
 
 ## Features
 
-| Area | What it does |
-| --- | --- |
-| Account management | Add ChatGPT/Codex accounts through OAuth, import exported account JSON, and group Team / Workspace accounts by organization. |
-| Quota monitoring | Show both 5-hour and 7-day quotas for Plus, and only the 7-day quota for Pro, including reset times and used / remaining display modes. |
-| Menu bar status | Keep plan-aware single or dual quota bars visible in the macOS menu bar, with account-health colors. |
-| Codex session lights | Install Codex hooks to show whether Codex is ready, running, offline, or stale. |
-| Model quality | Display intelligence rankings from [codexradar.com](https://codexradar.com/) showing the top six tiers by overall score. Overall IQ is weighted by valid tasks in both dimensions. Refresh every 15 minutes and retain the last successful data on failure. |
-| Banked resets | Show banked Codex rate-limit reset count and fetch reset-credit expiration from the official endpoint. |
-| Local token usage | Read local Codex SQLite state to show today / week / month token usage, session count, and a 16-week heatmap. |
-| Global refresh | Refresh account tokens, quota usage, model quality, and local usage stats from the top-right refresh button. |
-| Auto update | Check GitHub Releases in the background, show update availability in the menu, download with progress, and relaunch automatically. |
-| Safer switching | Switch accounts without restarting Codex, or switch and restart Codex when you explicitly need immediate effect. |
-| Localization | Switch the popover UI between Chinese and English. |
+| Feature | What you can do |
+| :--- | :--- |
+| **Menu bar status** | See quota bars and task counts together. Zero-count task states hide automatically; right-click for panel, Codex, and refresh shortcuts. |
+| **Task activity** | Follow running, compacting, waiting-for-input, and completed-unread states, reconciled with local task metadata and Codex unread state. |
+| **System notifications** | Opt in to completion, attention, and app update notifications. Notification content excludes conversation titles and messages. |
+| **Multiple accounts** | Add accounts through browser OAuth or import account JSON. View identity, organization, and plan; refresh, reauthorize, or remove accounts. |
+| **Quotas and subscriptions** | The current implementation shows 5-hour / 7-day windows for Plus and a 7-day window for Pro. Toggle used / remaining values and inspect reset credits and expiry. Subscription dates come from the subscription endpoint, with stale results labeled. |
+| **Account switching** | Update local credentials alone, or switch and restart Codex. Account changes also synchronize with the local authentication file. |
+| **Model score matrix** | Compare Codex Radar scores weighted across software and visual-spatial evaluations. Refreshes every 15 minutes; failures retain the last successful result from the current app session. |
+| **Local usage statistics** | Count timestamped token increments by local date, including cached input, with distinct session counts, a 30-day curve, and a 16-week heatmap. |
+| **Native appearance** | A two-column panel with light / dark themes and instant English / Chinese switching. Uses Liquid Glass on macOS 26 and system material fallbacks on earlier versions. |
+| **In-app updates** | Check GitHub Releases, download, verify, and install an update from the panel, with download progress and completion status. |
 
-## Installation
+## Quick start
 
-Download the latest build from [GitHub Releases](https://github.com/iamzjt-front-end/codexbar/releases/latest).
+### 1. Install
 
-1. Download `codexAppBar-*.zip`.
-2. Unzip it and move `codexAppBar.app` to `Applications`.
-3. Launch the app. It will appear in the macOS menu bar.
-4. If macOS blocks the first launch, open it from Finder with right click -> Open, or allow it from System Settings.
-5. Future releases appear inside the CodexAppBar menu, where you can update directly and watch download progress.
+Requires **macOS 15.6 or later**. Designed to work with the Codex desktop app on this Mac. Account quotas and model scores require an internet connection.
 
-## Requirements
+Choose a package from [Releases](https://github.com/j-tide/codex-bar/releases/latest):
 
-- macOS 15.6 or later
-- Codex desktop app installed locally
-- Network access to ChatGPT/Codex endpoints for quota and account metadata
-- Optional: Codex hooks enabled for session-status lights
+| Package | Installation |
+| :--- | :--- |
+| **DMG** · Recommended | Download `codexAppBar-*-setup.dmg`, open it, and drag the app into **Applications**. |
+| **ZIP** | Download `codexAppBar-*-release.zip`, unzip it, and move `codexAppBar.app` into **Applications**. |
 
-## Build From Source
+Launch the app, then click its menu bar icon to open the panel. Future updates are available in the app.
+
+<details>
+<summary>macOS blocked the first launch?</summary>
+
+The release script currently uses ad-hoc signing without Apple notarization. After verifying that the package came from this repository's Releases, choose **Open Anyway** in **System Settings → Privacy & Security**. Release notes include SHA-256 hashes for checking your download.
+
+</details>
+
+<details>
+<summary>Why are the packages still named codexAppBar?</summary>
+
+The project and app display name are now **codex-bar**. The `codexAppBar.app` bundle filename, release asset prefix, bundle identifiers, and local data paths retain their existing names for installation and updater compatibility. Older releases may still display CodexAppBar.
+
+</details>
+
+### 2. Add an account
+
+Click **Add** in the footer, complete OAuth sign-in in your browser, and return to the app. You can also **Import** compatible account JSON. If you close the browser page early, cancel the pending attempt or restart sign-in from the panel.
+
+When switching accounts:
+
+- **Switch only** updates the local authentication file. A running Codex instance uses the new account when it next reads its credentials.
+- **Switch and restart Codex** updates credentials and restarts Codex to apply them immediately. This interrupts running tasks.
+
+### 3. Connect task activity
+
+Follow the **Install hooks** prompt in the task activity section. The installer backs up `~/.codex/hooks.json`, merges the required entries, and preserves other hooks. The status script uses `/usr/bin/python3`.
+
+For alerts, click the section's notification control and allow macOS notifications. See the [notification reference](docs/notification-prompts.md) for trigger details (Chinese).
+
+### 4. Make it yours
+
+Use the footer to switch **English / Chinese**, **light / dark appearance**, **used / remaining quota**, and **task status visibility**. Choose a refresh interval of **10 seconds, 30 seconds, 1 minute, or 2 minutes**. The top-right refresh button refreshes accounts, quotas, model scores, and local statistics, and checks for updates.
+
+## Data and privacy
+
+codex-bar runs on your Mac without a separate backend. It reads local Codex state and connects directly to account endpoints, Codex Radar, and GitHub Releases.
+
+| Data | Source and purpose |
+| :--- | :--- |
+| Account pool and active account | `~/.codex/token_pool.json` and `~/.codex/auth.json`; may be written when adding, refreshing, or switching accounts. |
+| Quotas and subscriptions | ChatGPT / Codex endpoints for quotas, account identity, subscription dates, and available reset credits. |
+| Task activity | Hook state in `~/.codex/codexbar/sessions/`, combined with local SQLite, the task index, and `.codex-global-state.json` for titles, ordering, and unread state. |
+| Token statistics | Local SQLite locates session logs; timestamped JSONL usage increments drive the totals. The index cache in `~/Library/Caches/codexAppBar/` does not store prompts, replies, or credentials. |
+| Model scores and reset-window hints | Public data from [Codex Radar](https://codexradar.com/). Scores are third-party evaluations; reset-window hints do not replace your account's actual quota. |
+| App updates | This repository's [GitHub Releases](https://github.com/j-tide/codex-bar/releases). |
+
+**Treat account files like passwords.** The account pool and exported JSON contain login credentials. Do not commit them, attach them to issues, or expose them in screenshots. Task notifications exclude conversation content; the local usage index caches only the data needed for statistics.
+
+This is a community project, unaffiliated with OpenAI. Some features depend on private endpoints and internal Codex file formats, so upstream changes can affect compatibility.
+
+## FAQ
+
+<details>
+<summary>Why are task status or unread counts missing?</summary>
+
+Check that hooks are installed, then start a new task in Codex. Activity depends on local events and readable Codex data. Completed-unread tasks must also match the current account's Codex unread list. Missing events, stale states, or unmatched records are not invented as unread tasks.
+
+</details>
+
+<details>
+<summary>Why do token totals differ from quota percentages?</summary>
+
+They come from different sources. Quotas are reported by the server; token usage counts local session input and output, including cached input. It is neither a billing amount nor a conversion of quota percentages. Other devices are not automatically included. Today begins at local midnight, the week on Monday, and the month on its first day.
+
+</details>
+
+<details>
+<summary>Why are subscription dates or model scores marked as cached?</summary>
+
+When the network or an upstream endpoint is unavailable, the interface may keep a previous result and label its status. Subscription dates use the subscription endpoint's validity date, never the login token's expiry. You can retry model scores using that section's refresh button.
+
+</details>
+
+## Development
+
+Use **Xcode 26 or later with the macOS 26 SDK**. The app's deployment target remains macOS 15.6. The interface uses SwiftUI / AppKit, with system SQLite for local metadata.
 
 ```sh
-git clone https://github.com/iamzjt-front-end/codexbar.git
-cd codexbar
+git clone https://github.com/j-tide/codex-bar.git
+cd codex-bar
 open codexBar.xcodeproj
 ```
 
-Build and run the `codexBar` scheme from Xcode, or use the local restart script:
+Build and run the `codexBar` scheme, or use the helper script:
 
 ```sh
-scripts/restart-local.sh
+# Build and launch the local development app
+./scripts/restart-local.sh
+
+# Build without launching or replacing a running instance
+./scripts/restart-local.sh --build-only
 ```
 
-Useful flags:
+Run the tests:
 
 ```sh
-scripts/restart-local.sh --config Debug
-scripts/restart-local.sh --build-only
-scripts/restart-local.sh --run-only
-scripts/restart-local.sh --clean
+xcodebuild test \
+  -project codexBar.xcodeproj \
+  -scheme codexBar \
+  -destination 'platform=macOS' \
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- \
+  CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
 ```
 
-## Usage
+<details>
+<summary>Code map and releases</summary>
 
-1. Open CodexAppBar from the macOS menu bar.
-2. Add an account with OAuth, or import an exported account JSON.
-3. Install hooks if you want Codex session lights in the menu bar.
-4. Use the bottom controls to adjust refresh interval, quota display mode, menu bar display mode, session lights, and language.
-5. When switching accounts, choose one of the two modes:
-   - Switch only: update `~/.codex/auth.json` without restarting Codex.
-   - Switch and restart: update the account and restart Codex immediately.
+| Directory | Responsibility |
+| :--- | :--- |
+| `codexBar/Views/` | The panel, account list, model matrix, usage charts, and update components. |
+| `codexBar/Services/` | OAuth, account storage, quotas, task synchronization, notifications, and updates. |
+| `codexBar/Models/` | Account, task state, and metadata models. |
+| `codexBar/Support/` | Native menu bar artwork, panel behavior, and the Python hook. |
+| `NotificationHelper/` | The macOS notification helper app. |
+| `codexBarTests/` | Quota, concurrent account refresh, task state, statistics, and interface regression tests. |
+| `scripts/` | Local builds, icon generation, DMG packaging, and releases. |
 
-## How It Works
-
-CodexAppBar does not require a hosted backend. It combines local Codex files with OpenAI / Codex-related endpoints.
-
-| Data | Source |
-| --- | --- |
-| Account pool | `~/.codex/token_pool.json` |
-| Active account | `~/.codex/auth.json` |
-| Quota usage | `https://chatgpt.com/backend-api/wham/usage` |
-| Account / organization metadata | `https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27` |
-| Model quality | `https://codexradar.com/api/intelligence-efficiency-metrics`, `https://codexradar.com/api/visual-spatial-reasoning` |
-| Reset window | `https://codexradar.com/current.json` |
-| Local token usage | `~/.codex/state_5.sqlite` or the legacy path `~/.codex/sqlite/state_5.sqlite` |
-| Hook configuration | `~/.codex/hooks.json` |
-| Session status hook | `~/.codex/codexbar/codexbar-session-status-hook.py` |
-| Session status output | `~/.codex/codexbar/session_status.json` |
-
-## Privacy And Safety
-
-CodexAppBar is designed to run locally, but it touches sensitive Codex authentication state.
-
-- OAuth tokens and account exports should stay on your own machine.
-- Do not commit or share `token_pool.json`, `auth.json`, or exported account JSON.
-- Account switching writes to `~/.codex/auth.json`.
-- Hook installation backs up and updates `~/.codex/hooks.json`.
-- Restarting Codex can interrupt running tasks.
-- Private endpoints and local file formats may change at any time.
-
-## Release
-
-The repository includes a release helper that creates release notes, archives the app, applies ad-hoc signing, packages a zip, and publishes with GitHub CLI.
-The date tag is the public version, for example `v2026.06.18` / `v2026.06.18.1`. The script writes the date into `CFBundleShortVersionString` (`2026.06.18`) and the complete version into `CFBundleVersion` (`20260618` / `20260618.1`); the app renders the complete date version and uses it for update comparisons. Release archives consistently use `codexAppBar-vYYYY.MM.DD[.N]-release.zip` and `codexAppBar-vYYYY.MM.DD[.N]-setup.dmg`. The DMG includes an Applications shortcut for drag-and-drop installation. Both assets are uploaded and SHA-256 verified.
+Before publishing, sign in to GitHub CLI and check the working tree and target commit:
 
 ```sh
-scripts/release.sh
+./scripts/release.sh --dry-run
+./scripts/release.sh
 ```
 
-Common flags:
+The script creates `vYYYY.MM.DD[.N]` versions, builds, signs, and validates ZIP / DMG packages, then uploads them through GitHub CLI and verifies their SHA-256 digests. See `./scripts/release.sh --help` for options.
 
-```sh
-scripts/release.sh --yes
-scripts/release.sh --tag v2026.06.15
-scripts/release.sh --notes-file ./release-notes.md
-scripts/release.sh --dry-run
-scripts/release.sh --allow-dirty
-```
+</details>
 
-Before publishing, make sure `gh auth status` is valid, the target tag does not already exist, and the working tree contains only intentional changes.
+## Contributing
 
-## Star History
+[Issues](https://github.com/j-tide/codex-bar/issues), suggestions, and pull requests are welcome.
 
-<a href="https://www.star-history.com/#iamzjt-front-end/codexbar&Date">
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=iamzjt-front-end/codexbar&type=Date">
-</a>
+- Include your macOS, Codex, and codex-bar versions, reproduction steps, and sanitized screenshots or logs when reporting a bug.
+- Keep each change focused. Run relevant tests for behavior changes; check both languages and appearances for interface changes.
+- Update both READMEs when features or installation steps change.
 
-## Acknowledgements
+## Acknowledgments and license
 
-- Model quality data is provided by [CodexRadar](https://codexradar.com/).
-- This project follows the local Codex file layout and may need updates when Codex changes its internal formats.
+Built on [xmasdong/codexbar](https://github.com/xmasdong/codexbar). Thanks to the original author and all contributors. Model scores and reset-window data are provided by [Codex Radar](https://codexradar.com/).
 
-## License
-
-[MIT](LICENSE)
+Released under the [MIT License](LICENSE).
