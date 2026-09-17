@@ -12,8 +12,8 @@ enum OAuthCallbackPage {
 
     static func html(chinese: Bool) -> String {
         let title = chinese ? "授权已接收" : "Authorization received"
-        let description = chinese ? "正在由 CodexAppBar 完成账号验证。<br>返回应用即可查看结果。" : "CodexAppBar is finishing account verification.<br>Return to the app to see the result."
-        let action = chinese ? "返回 CodexAppBar" : "Return to CodexAppBar"
+        let description = chinese ? "正在由 codex-bar 完成账号验证。<br>返回应用即可查看结果。" : "codex-bar is finishing account verification.<br>Return to the app to see the result."
+        let action = chinese ? "返回 codex-bar" : "Return to codex-bar"
         let hint = chinese ? "也可以点击菜单栏中的应用图标" : "You can also use the app icon in your menu bar"
         let footer = chinese ? "你可以安全关闭此标签页" : "You can safely close this tab"
         return """
@@ -25,7 +25,7 @@ enum OAuthCallbackPage {
           <meta name="referrer" content="no-referrer">
           <meta name="color-scheme" content="light dark">
           <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNiIgZmlsbD0iIzIxM2Q0OSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDMgMykgc2NhbGUoMS4xMjUpIiBmaWxsPSJub25lIiBzdHJva2U9IiM3NWUwZDIiIHN0cm9rZS13aWR0aD0iMS42NSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMTEuMSAzLjRhNiA2IDAgMSAwIDAgOS4yTTYuOCA1LjNoNy44TTYuOCA4aDUuN002LjggMTAuN2g3LjgiLz48L2c+PC9zdmc+">
-          <title>\(title) · CodexAppBar</title>
+          <title>\(title) · codex-bar</title>
           <style>
             *{box-sizing:border-box}html{min-height:100%;background:#f5f7f8}
             body{margin:0;min-height:100svh;display:grid;grid-template-rows:auto 1fr auto;color:#202d36;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;background:radial-gradient(ellipse at 50% 42%,#ffffff 0,transparent 56%),radial-gradient(ellipse at 82% 0%,#dff4f3 0,transparent 42%),#f5f7f8}
@@ -51,7 +51,7 @@ enum OAuthCallbackPage {
           </style>
         </head>
         <body>
-          <header><div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M11.1 3.4a6 6 0 1 0 0 9.2M6.8 5.3h7.8M6.8 8h5.7M6.8 10.7h7.8"/></svg>CodexAppBar</div><span class="context">\(chinese ? "账号授权" : "Account authorization")</span></header>
+          <header><div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" aria-hidden="true"><path d="M11.1 3.4a6 6 0 1 0 0 9.2M6.8 5.3h7.8M6.8 8h5.7M6.8 10.7h7.8"/></svg>codex-bar</div><span class="context">\(chinese ? "账号授权" : "Account authorization")</span></header>
           <main>
             <div class="emblem" aria-hidden="true">
               <svg class="app-icon" viewBox="0 0 104 104" fill="none"><defs><linearGradient id="glass" x1="12" y1="0" x2="89" y2="104" gradientUnits="userSpaceOnUse"><stop stop-color="#345460"/><stop offset="1" stop-color="#10232e"/></linearGradient><linearGradient id="rim" x1="0" y1="0" x2="100" y2="104"><stop stop-color="#b9f6ec" stop-opacity=".6"/><stop offset=".55" stop-color="#72c5c8" stop-opacity=".06"/><stop offset="1" stop-color="#a9f4ef" stop-opacity=".2"/></linearGradient></defs><rect x="1" y="1" width="102" height="102" rx="25" fill="url(#glass)" stroke="url(#rim)"/><g transform="translate(18 18) scale(4.25)" stroke-width="1.65" stroke-linecap="round"><path d="M11.1 3.4a6 6 0 1 0 0 9.2" stroke="#75e0d2"/><path d="M6.8 5.3h7.8M6.8 8h5.7M6.8 10.7h7.8" stroke="#e6f4f7"/></g></svg>

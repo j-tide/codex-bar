@@ -288,7 +288,7 @@ enum AppUpdateGalleryWindow {
             backing: .buffered,
             defer: false
         )
-        window.title = "CodexAppBar · Update components"
+        window.title = "codex-bar · Update components"
         if arguments.contains("--update-gallery-dark") {
             window.appearance = NSAppearance(named: .darkAqua)
         }
@@ -303,7 +303,7 @@ enum AppUpdateGalleryWindow {
 
 struct AppUpdateStatusGallery: View {
     private let release = AppUpdateRelease(
-        tagName: "v2026.09.14.4", title: "CodexAppBar v2026.09.14.4",
+        tagName: "v2026.09.14.4", title: "codex-bar v2026.09.14.4",
         assetName: "codexAppBar-release.zip", assetURL: URL(string: "https://example.com/update.zip")!,
         assetSize: 3_120_000, assetDigest: nil
     )
@@ -311,7 +311,7 @@ struct AppUpdateStatusGallery: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("CodexAppBar · Update states")
+                Text("codex-bar · Update states")
                     .font(.system(size: 20, weight: .semibold))
                 ForEach(Array(cards.enumerated()), id: \.offset) { index, card in
                     AppUpdateStatusCard(content: card, initiallyConfirming: index == 4)

@@ -6,7 +6,7 @@ SCHEME="codexBar"
 CONFIGURATION="Release"
 ARCHIVE_PATH="build/codexBar.xcarchive"
 APP_RELATIVE_PATH="Products/Applications/codexAppBar.app"
-DEFAULT_REPO="iamzjt-front-end/codexbar"
+DEFAULT_REPO="j-tide/codex-bar"
 
 REPO="$DEFAULT_REPO"
 TAG=""
@@ -191,7 +191,7 @@ Usage: scripts/release.sh [options]
 
 Options:
   --tag TAG          指定日期版本 tag；格式为 vYYYY.MM.DD[.N]，冲突时自动递增为 .1/.2
-  --repo OWNER/REPO  GitHub 仓库；默认 iamzjt-front-end/codexbar
+  --repo OWNER/REPO  GitHub 仓库；默认 j-tide/codex-bar
   --notes-file FILE  使用自定义中文 release notes 文件
   --yes             跳过交互确认
   --dry-run         只打印将执行的发布信息，不创建 tag、不推送、不发 release
@@ -520,7 +520,7 @@ if [[ "$DRY_RUN" != 1 ]]; then
 fi
 
 run_progress "ZIP 完整性校验中" "ZIP 校验完成" unzip -t "$asset_path"
-run_progress "DMG 打包及校验中" "DMG 打包及校验完成" bash scripts/package-dmg.sh "$app_path" "$dmg_path" "CodexAppBar $public_version"
+run_progress "DMG 打包及校验中" "DMG 打包及校验完成" bash scripts/package-dmg.sh "$app_path" "$dmg_path" "codex-bar $public_version"
 
 sha256="dry-run"
 dmg_sha256="dry-run"
@@ -546,13 +546,13 @@ confirm "确认创建 tag、推送并发布 GitHub Release？" || {
   cancel_release
 }
 
-run_progress "创建 tag 中" "tag 已创建" git tag -a "$TAG" -m "CodexAppBar $TAG"
+run_progress "创建 tag 中" "tag 已创建" git tag -a "$TAG" -m "codex-bar $TAG"
 run_progress "推送 main 中" "main 已推送" git push origin "$current_branch"
 run_progress "推送 tag 中" "tag 已推送" git push origin "$TAG"
 
 run_progress "发布 GitHub Release 中" "GitHub Release 已发布" gh release create "$TAG" "$asset_path" "$dmg_path" \
   --repo "$REPO" \
-  --title "CodexAppBar $TAG" \
+  --title "codex-bar $TAG" \
   --notes-file "$notes_tmp" \
   --latest
 

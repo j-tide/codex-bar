@@ -48,9 +48,9 @@ final class AppUpdateService: ObservableObject {
     @Published private(set) var completedUpdate: AppUpdateCompletion?
     private var latestRelease: AppUpdateRelease?
 
-    private static let latestReleaseURL = URL(string: "https://api.github.com/repos/iamzjt-front-end/codexbar/releases/latest")!
-    private static let releasesAtomURL = URL(string: "https://github.com/iamzjt-front-end/codexbar/releases.atom")!
-    private static let latestReleasePageURL = URL(string: "https://github.com/iamzjt-front-end/codexbar/releases/latest")!
+    private static let latestReleaseURL = URL(string: "https://api.github.com/repos/j-tide/codex-bar/releases/latest")!
+    private static let releasesAtomURL = URL(string: "https://github.com/j-tide/codex-bar/releases.atom")!
+    private static let latestReleasePageURL = URL(string: "https://github.com/j-tide/codex-bar/releases/latest")!
     private static let githubBaseURL = URL(string: "https://github.com")!
     private static let pendingInstallTagKey = "codexbar.pendingInstallTag"
     private static let pendingInstallNotifiedKey = "codexbar.pendingInstallNotifiedTag"
@@ -249,7 +249,7 @@ final class AppUpdateService: ObservableObject {
     private func fetchLatestReleaseFromAPI() async throws -> GitHubReleaseResponse {
         var request = URLRequest(url: Self.latestReleaseURL)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("CodexAppBar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("codex-bar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -273,7 +273,7 @@ final class AppUpdateService: ObservableObject {
     private func fetchLatestReleaseFromAtom() async throws -> GitHubReleaseResponse {
         var request = URLRequest(url: Self.releasesAtomURL)
         request.timeoutInterval = 20
-        request.setValue("CodexAppBar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("codex-bar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
@@ -291,7 +291,7 @@ final class AppUpdateService: ObservableObject {
         let asset = try await fetchInstallableAssetFromWeb(tagName: tagName)
         return GitHubReleaseResponse(
             tagName: tagName,
-            name: "CodexAppBar \(tagName)",
+            name: "codex-bar \(tagName)",
             assets: [asset]
         )
     }
@@ -299,7 +299,7 @@ final class AppUpdateService: ObservableObject {
     private func fetchLatestReleaseFromLatestPage() async throws -> GitHubReleaseResponse {
         var latestRequest = URLRequest(url: Self.latestReleasePageURL)
         latestRequest.timeoutInterval = 20
-        latestRequest.setValue("CodexAppBar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
+        latestRequest.setValue("codex-bar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
 
         let (_, latestResponse) = try await URLSession.shared.data(for: latestRequest)
         guard let httpResponse = latestResponse as? HTTPURLResponse,
@@ -312,20 +312,20 @@ final class AppUpdateService: ObservableObject {
         let asset = try await fetchInstallableAssetFromWeb(tagName: tagName)
         return GitHubReleaseResponse(
             tagName: tagName,
-            name: "CodexAppBar \(tagName)",
+            name: "codex-bar \(tagName)",
             assets: [asset]
         )
     }
 
     private func fetchInstallableAssetFromWeb(tagName: String) async throws -> GitHubReleaseAsset {
         let escapedTag = tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? tagName
-        guard let assetsURL = URL(string: "https://github.com/iamzjt-front-end/codexbar/releases/expanded_assets/\(escapedTag)") else {
+        guard let assetsURL = URL(string: "https://github.com/j-tide/codex-bar/releases/expanded_assets/\(escapedTag)") else {
             throw AppUpdateError.invalidReleaseResponse
         }
 
         var request = URLRequest(url: assetsURL)
         request.timeoutInterval = 20
-        request.setValue("CodexAppBar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("codex-bar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
@@ -367,7 +367,7 @@ final class AppUpdateService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
         request.timeoutInterval = 20
-        request.setValue("CodexAppBar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("codex-bar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
 
         guard let (_, response) = try? await URLSession.shared.data(for: request),
               let httpResponse = response as? HTTPURLResponse,
@@ -382,7 +382,7 @@ final class AppUpdateService: ObservableObject {
         let downloadDirectory = try makeUpdateDirectory(named: "download")
         let destinationURL = downloadDirectory.appendingPathComponent(release.assetName)
         var request = URLRequest(url: release.assetURL)
-        request.setValue("CodexAppBar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("codex-bar/\(currentBundleVersion)", forHTTPHeaderField: "User-Agent")
 
         return try await withCheckedThrowingContinuation { continuation in
             let task = URLSession.shared.downloadTask(with: request) { [weak self] temporaryURL, response, error in
@@ -498,7 +498,7 @@ final class AppUpdateService: ObservableObject {
         log_file="$4"
 
         {
-          echo "CodexAppBar updater started: $(date)"
+          echo "codex-bar updater started: $(date)"
 
           i=0
           while kill -0 "$app_pid" 2>/dev/null; do
@@ -524,7 +524,7 @@ final class AppUpdateService: ObservableObject {
             /usr/bin/open "$current_app"
             rm -rf "$backup_app"
             rm -rf "$(dirname "$new_app")"
-            echo "CodexAppBar updater finished: $(date)"
+            echo "codex-bar updater finished: $(date)"
           else
             echo "Copy failed; restoring previous app"
             rm -rf "$current_app"

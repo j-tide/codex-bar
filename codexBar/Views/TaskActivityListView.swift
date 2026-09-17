@@ -214,8 +214,8 @@ private struct TaskNotificationControl: View {
                   : (L.zh ? "暂时无法开启提醒" : "Could not enable notifications"), systemImage: "bell.slash")
                 .font(.system(size: 12, weight: .semibold))
             Text(systemBlocked
-                 ? (L.zh ? "在系统设置 → 通知中找到绿色图标的 CodexAppBar，打开“允许通知”。返回后会自动同步。"
-                    : "In System Settings → Notifications, allow CodexAppBar with the green icon. This app will update when you return.")
+                 ? (L.zh ? "在系统设置 → 通知中找到绿色图标的 codex-bar，打开“允许通知”。返回后会自动同步。"
+                    : "In System Settings → Notifications, allow codex-bar with the green icon. This app will update when you return.")
                  : (L.zh ? "系统尚未完成授权，请重试。" : "System authorization did not complete. Please retry."))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -391,7 +391,7 @@ struct MenuBarView: View {
                     .resizable().interpolation(.high)
                     .scaledToFit().frame(width: 28, height: 28)
                     .accessibilityHidden(true)
-                Text("CodexAppBar").font(.system(size: 17, weight: .medium))
+                Text("codex-bar").font(.system(size: 17, weight: .medium))
             }
             Text(appUpdater.currentVersionDisplay).font(.system(size: 11)).foregroundStyle(.secondary)
             Spacer()

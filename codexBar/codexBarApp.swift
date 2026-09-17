@@ -162,7 +162,7 @@ private final class AppStatusBarController: NSObject {
                 if ProcessInfo.processInfo.arguments.contains("--test-task-notification") {
                     let id = SystemTaskNotificationClient.identifierPrefix + "diagnostic-" + UUID().uuidString
                     let content = UNMutableNotificationContent()
-                    content.title = L.zh ? "CodexAppBar 通知测试" : "CodexAppBar notification test"
+                    content.title = L.zh ? "codex-bar 通知测试" : "codex-bar notification test"
                     content.body = L.zh ? "看到绿色图标即表示新通知通道生效。" : "A green icon confirms that the new notification channel is active."
                     content.sound = .default
                     NotificationBridge.shared.add(
@@ -272,7 +272,7 @@ private final class AppStatusBarController: NSObject {
         let lights = add(L.zh ? "显示任务状态" : "Show Task Status", #selector(toggleStatusFromMenu))
         lights.state = quotaDisplay?.showStatusLights == true ? .on : .off
         menu.addItem(.separator())
-        _ = add(L.quit + " CodexAppBar…", #selector(quitFromMenu))
+        _ = add(L.quit + " codex-bar…", #selector(quitFromMenu))
         NSMenu.popUpContextMenu(menu, with: event, for: button)
     }
 
@@ -416,7 +416,7 @@ private final class AppStatusBarController: NSObject {
                 NSApplication.shared.activate(ignoringOtherApps: true)
                 let alert = NSAlert()
                 alert.messageText = L.zh ? "无法打开通知设置" : "Could not open Notification Settings"
-                alert.informativeText = L.zh ? "请打开系统设置 → 通知，找到绿色图标的 CodexAppBar。" : "Open System Settings → Notifications and find CodexAppBar with the green icon."
+                alert.informativeText = L.zh ? "请打开系统设置 → 通知，找到绿色图标的 codex-bar。" : "Open System Settings → Notifications and find codex-bar with the green icon."
                 PopupModalPresenter.run { alert.runModal() }
             }
         }

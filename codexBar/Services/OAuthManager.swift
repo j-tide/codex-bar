@@ -290,7 +290,7 @@ final class LocalCallbackServer {
               let url = URLComponents(string: "http://localhost" + path[1]), url.path == "/auth/callback",
               url.queryItems?.first(where: { $0.name == "state" })?.value == expectedState,
               let code = url.queryItems?.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
-            respond(fd, status: "400 Bad Request", body: "This authorization link is no longer valid. Return to CodexAppBar and use the latest page.")
+            respond(fd, status: "400 Bad Request", body: "This authorization link is no longer valid. Return to codex-bar and use the latest page.")
             return
         }
         let html = OAuthCallbackPage.html(chinese: L.zh)

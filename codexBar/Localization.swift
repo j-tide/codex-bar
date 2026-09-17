@@ -94,7 +94,7 @@ enum L {
     static var codexHookInstallButton: String { zh ? "安装钩子" : "Install Hooks" }
     static var codexHookUpdateButton: String { zh ? "更新钩子" : "Update Hooks" }
     static var codexHookInstallConfirmTitle: String {
-        zh ? "安装 CodexAppBar 钩子？" : "Install CodexAppBar hooks?"
+        zh ? "安装 codex-bar 钩子？" : "Install codex-bar hooks?"
     }
     static func codexHookInstallConfirmInfo(_ path: String) -> String {
         zh
@@ -130,8 +130,8 @@ enum L {
     }
     static var taskAttentionNotificationPermissionDenied: String {
         zh
-            ? "通知未启用。请在系统设置中允许绿色图标的 CodexAppBar 发送通知。"
-            : "Notifications are off. In System Settings, allow notifications for CodexAppBar with the green icon."
+            ? "通知未启用。请在系统设置中允许绿色图标的 codex-bar 发送通知。"
+            : "Notifications are off. In System Settings, allow notifications for codex-bar with the green icon."
     }
     static var taskAttentionNotificationTitle: String { zh ? "Codex 需要处理" : "Codex needs attention" }
     static var taskCompletedNotificationTitle: String { zh ? "Codex 任务已完成" : "Codex task completed" }
@@ -255,15 +255,15 @@ enum L {
     }
     static var updateInstalling: String { zh ? "正在安装更新" : "Installing update" }
     static var updateInstallingDetail: String {
-        zh ? "CodexAppBar 将自动退出并重新打开。" : "CodexAppBar will quit and reopen automatically."
+        zh ? "codex-bar 将自动退出并重新打开。" : "codex-bar will quit and reopen automatically."
     }
     static func updateInstallConfirmTitle(_ version: String) -> String {
         zh ? "安装 \(version)？" : "Install \(version)?"
     }
     static var updateInstallConfirmInfo: String {
         zh
-            ? "安装时会退出并替换 CodexAppBar，完成后自动重新打开。"
-            : "Installing will quit and replace CodexAppBar, then reopen it automatically."
+            ? "安装时会退出并替换 codex-bar，完成后自动重新打开。"
+            : "Installing will quit and replace codex-bar, then reopen it automatically."
     }
     static var updateInstallConfirmButton: String { zh ? "安装并重启" : "Install & Relaunch" }
     static var updateUpToDate: String { zh ? "已是最新版本" : "Already up to date" }
@@ -272,7 +272,7 @@ enum L {
     }
     static var updateFailedTitle: String { zh ? "更新失败" : "Update failed" }
     static var updateNotificationTitle: String {
-        zh ? "CodexAppBar 有新版本" : "CodexAppBar update available"
+        zh ? "codex-bar 有新版本" : "codex-bar update available"
     }
     static func updateNotificationBody(_ name: String) -> String {
         zh ? "\(name) 已发布，点按打开菜单并安装。" : "\(name) is available. Click to open the menu and install it."
@@ -287,7 +287,7 @@ enum L {
         zh ? "关闭更新完成提示" : "Dismiss update completed"
     }
     static var updateInstalledNotificationTitle: String {
-        zh ? "CodexAppBar 更新完成" : "CodexAppBar update complete"
+        zh ? "codex-bar 更新完成" : "codex-bar update complete"
     }
     static func updateInstalledNotificationBody(_ version: String) -> String {
         zh ? "已升级至 \(version)。" : "Updated to \(version)."

@@ -10,7 +10,7 @@ enum CodexBrandMark {
                  tasks: NSColor.white.withAlphaComponent(0.93))
             return true
         }
-        image.accessibilityDescription = "CodexAppBar"
+        image.accessibilityDescription = "codex-bar"
         return image
     }()
 

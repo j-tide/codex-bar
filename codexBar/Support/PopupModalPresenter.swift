@@ -40,7 +40,7 @@ enum AppQuitConfirmation {
 
     private static func showConfirmation() -> Bool {
         let alert = NSAlert()
-        alert.messageText = L.zh ? "退出 CodexAppBar？" : "Quit CodexAppBar?"
+        alert.messageText = L.zh ? "退出 codex-bar？" : "Quit codex-bar?"
         alert.informativeText = L.zh
             ? "退出后将停止额度刷新和任务提醒。Codex 中正在运行的任务不受影响。"
             : "Quota refreshes and task notifications will stop. Running tasks in Codex will continue."

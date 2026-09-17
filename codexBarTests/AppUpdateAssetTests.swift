@@ -9,7 +9,7 @@ final class AppUpdateAssetTests: XCTestCase {
     private func row(_ suffix: String, digest: String?) -> String {
         """
         <li data-view-component="true" class="Box-row">
-          <div><a href="/iamzjt-front-end/codexbar/releases/download/v2026.09.14/codexAppBar-v2026.09.14-release.\(suffix)"><span>Download</span></a></div>
+          <div><a href="/j-tide/codex-bar/releases/download/v2026.09.14/codexAppBar-v2026.09.14-release.\(suffix)"><span>Download</span></a></div>
           <div><span>\(digest ?? "")</span></div>
         </li>
         """
@@ -21,7 +21,7 @@ final class AppUpdateAssetTests: XCTestCase {
         for html in [dmg + zip, zip + dmg] {
             let asset = try AppUpdateService.installableWebAsset(in: "<ul>\(html)</ul>")
             XCTAssertEqual(asset.url.absoluteString,
-                "https://github.com/iamzjt-front-end/codexbar/releases/download/v2026.09.14/codexAppBar-v2026.09.14-release.zip")
+                "https://github.com/j-tide/codex-bar/releases/download/v2026.09.14/codexAppBar-v2026.09.14-release.zip")
             XCTAssertEqual(asset.digest, zipHash)
         }
     }

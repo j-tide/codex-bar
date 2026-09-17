@@ -74,7 +74,7 @@ struct GenerateAppIcon {
                 let title: [NSAttributedString.Key: Any] = [
                     .font: NSFont.systemFont(ofSize: 28, weight: .semibold),
                     .foregroundColor: color(30, 46, 56)]
-                ("CodexAppBar" as NSString).draw(at: NSPoint(x: 480, y: 358), withAttributes: title)
+                ("codex-bar" as NSString).draw(at: NSPoint(x: 480, y: 358), withAttributes: title)
                 let caption: [NSAttributedString.Key: Any] = [
                     .font: NSFont.systemFont(ofSize: 17), .foregroundColor: color(93, 111, 123)]
                 ("额度监控 · 并行任务" as NSString).draw(at: NSPoint(x: 480, y: 318), withAttributes: caption)

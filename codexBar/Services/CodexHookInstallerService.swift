@@ -52,49 +52,49 @@ final class CodexHookInstallerService: ObservableObject {
             event: "SessionStart",
             matcher: "compact",
             scriptArguments: ["SessionStart", "compact"],
-            statusMessage: "Marking CodexAppBar processing"
+            statusMessage: "Marking codex-bar processing"
         ),
         CodexHookSpec(
             event: "SessionStart",
             matcher: "startup|resume|clear",
             scriptArguments: ["SessionStart"],
-            statusMessage: "Syncing CodexAppBar status"
+            statusMessage: "Syncing codex-bar status"
         ),
         CodexHookSpec(
             event: "UserPromptSubmit",
             matcher: nil,
             scriptArguments: ["UserPromptSubmit"],
-            statusMessage: "Marking CodexAppBar running"
+            statusMessage: "Marking codex-bar running"
         ),
         CodexHookSpec(
             event: "PreCompact",
             matcher: nil,
             scriptArguments: ["PreCompact"],
-            statusMessage: "Syncing CodexAppBar status"
+            statusMessage: "Syncing codex-bar status"
         ),
         CodexHookSpec(
             event: "PostCompact",
             matcher: nil,
             scriptArguments: ["PostCompact"],
-            statusMessage: "Syncing CodexAppBar status"
+            statusMessage: "Syncing codex-bar status"
         ),
         CodexHookSpec(
             event: "Interrupt",
             matcher: nil,
             scriptArguments: ["Interrupt"],
-            statusMessage: "Syncing CodexAppBar status"
+            statusMessage: "Syncing codex-bar status"
         ),
         CodexHookSpec(
             event: "SessionEnd",
             matcher: nil,
             scriptArguments: ["SessionEnd"],
-            statusMessage: "Syncing CodexAppBar status"
+            statusMessage: "Syncing codex-bar status"
         ),
         CodexHookSpec(
             event: "Stop",
             matcher: nil,
             scriptArguments: ["Stop"],
-            statusMessage: "Marking CodexAppBar ready"
+            statusMessage: "Marking codex-bar ready"
         )
     ]
 
