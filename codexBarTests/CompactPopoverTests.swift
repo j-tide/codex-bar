@@ -100,6 +100,68 @@ final class CompactPopoverTests: XCTestCase {
         }
     }
 
+    func testMenuBarButtonFitsVisibleContentDuringStateTransitions() throws {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        defer { NSStatusBar.system.removeStatusItem(item) }
+        let button = try XCTUnwrap(item.button)
+        button.title = ""
+        button.wantsLayer = true
+        let view = StatusBarCapsuleView(frame: button.bounds)
+        view.autoresizingMask = [.width, .height]
+        button.addSubview(view)
+        let quota = StatusBarQuotaState(text: "7d 14%", fiveHourDisplayPercent: nil,
+            fiveHourUsedPercent: nil, weeklyDisplayPercent: 14, weeklyUsedPercent: 86)
+        let now = Date()
+        let states: [TaskActivityState] = [.needsAttention, .running, .ready]
+        button.postsFrameChangedNotifications = true
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification, object: button, queue: nil
+        ) { _ in
+            MainActor.assumeIsolated {
+                XCTAssertEqual(view.frame, button.bounds, "Content must already fit when AppKit resizes the button")
+            }
+        }
+        for highlighted in [false, true] {
+            button.highlight(highlighted)
+            for mask in [7, 2, 6, 0, 4, 1, 3, 5, 0] {
+                let records = states.enumerated().compactMap { index, state -> TaskActivityRecord? in
+                    guard mask & (1 << index) != 0 else { return nil }
+                    return TaskActivityRecord(taskKey: state.rawValue, eventKey: state.rawValue,
+                        state: state, phase: .processing, projectName: "test", updatedAt: now, source: "Stop")
+                }
+                let snapshot = TaskCenterSnapshot(records: records, now: now)
+                view.update(in: item, iconName: "bolt.circle.fill", quotaState: quota,
+                    light: .running, snapshot: snapshot, showStatusLights: true)
+
+                // Check immediately: AppKit may capture the button before the
+                // next run-loop layout, including its highlighted replicas.
+                let lastVisibleEdge = try XCTUnwrap(view.subviews.filter { !$0.isHidden }.map(\.frame.maxX).max())
+                XCTAssertEqual(button.bounds.width, lastVisibleEdge + 2, accuracy: 0.01)
+                XCTAssertEqual(item.length, button.bounds.width, accuracy: 0.01)
+                XCTAssertEqual(view.frame, button.bounds)
+                let counts = try XCTUnwrap(view.subviews.first { $0 is StatusTaskCountsView })
+                let labels = counts.subviews.compactMap { $0 as? NSTextField }
+                for label in labels where label.isHidden { XCTAssertEqual(label.frame, .zero) }
+                if mask != 0 {
+                    let countEdge = try XCTUnwrap(labels.filter { !$0.isHidden }.map(\.frame.maxX).max())
+                    XCTAssertEqual(counts.bounds.width, countEdge, accuracy: 0.01)
+                } else {
+                    XCTAssertTrue(counts.isHidden)
+                    XCTAssertEqual(counts.frame, .zero)
+                }
+            }
+        }
+        NotificationCenter.default.removeObserver(observer)
+        view.update(in: item, iconName: "bolt.circle.fill", quotaState: quota,
+            light: .offline, snapshot: .empty, showStatusLights: false)
+        let compactWidth = item.length
+        item.length += 31
+        view.update(in: item, iconName: "bolt.circle.fill", quotaState: quota,
+            light: .offline, snapshot: .empty, showStatusLights: false)
+        XCTAssertEqual(item.length, compactWidth, "Repair a stale native width even when the model is unchanged")
+        XCTAssertEqual(view.bounds.width, compactWidth)
+    }
+
     func testMenuBarSpinnerUsesCompositorWithoutMovingCounts() async throws {
         let now = Date()
         let record = TaskActivityRecord(taskKey: "run", eventKey: "run", state: .running,
