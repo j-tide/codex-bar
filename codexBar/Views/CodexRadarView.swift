@@ -164,7 +164,7 @@ struct CodexRadarTableView: View {
     @Environment(\.colorScheme) private var colorScheme
     let matrix: CodexRadarMatrix
     @State private var hoveredID: String?
-    private let modelWidth: CGFloat = 64
+    private let modelWidth: CGFloat = 82
     private let rowHeight: CGFloat = 28
     static func height(rowCount: Int) -> CGFloat { 20 + CGFloat(rowCount) * 30 }
 

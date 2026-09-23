@@ -9,7 +9,7 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         let report = try fixtureReport()
         let matrix = CodexRadarPresentation.matrix(from: report.modelIQ(for: .comprehensive))
         let names = matrix.rankedCellIDs.prefix(6).compactMap { matrix.cell(id: $0)?.displayName }
-        XCTAssertEqual(names, ["Astra max", "Astra high", "Astra ultra", "Astra medium", "Astra low", "Sol max"])
+        XCTAssertEqual(names, ["GPT-6 Astra max", "GPT-6 Astra high", "GPT-6 Astra ultra", "GPT-6 Astra medium", "GPT-6 Astra low", "GPT-5.6 Sol max"])
         let first = try XCTUnwrap(matrix.cell(id: matrix.bestCellID))
         XCTAssertEqual(first.score, (112.09 * 91 + 140.22102 * 5) / 96, accuracy: 0.00001)
         XCTAssertEqual(report.updatedAt(for: .comprehensive), report.updatedAt(for: .software))

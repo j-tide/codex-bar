@@ -271,23 +271,30 @@ enum CodexRadarPresentation {
         effort: String,
         family: CodexRadarModelFamily
     ) -> (id: String, name: String) {
-        if let familyName = family.displayName {
-            return (family.rawValue, familyName)
-        }
-
         let rawName = model?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? strippedModelName(from: label, effort: effort)
             ?? "Codex"
-        let displayName = formattedModelName(rawName)
-        let stableID = displayName.lowercased().replacingOccurrences(of: " ", with: "-")
+        let displayName = formattedModelName(rawName, family: family)
+        let stableID = rawName.lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
         return ("model:\(stableID)", displayName)
     }
 
-    private static func formattedModelName(_ value: String) -> String {
-        if value.lowercased().hasPrefix("gpt-") {
-            return "GPT-" + value.dropFirst(4)
+    private static func formattedModelName(_ value: String, family: CodexRadarModelFamily) -> String {
+        let normalized = value.replacingOccurrences(of: "_", with: "-")
+        if let familyName = family.displayName {
+            if normalized.lowercased() == family.rawValue { return familyName }
+            let suffix = "-\(family.rawValue)"
+            if normalized.lowercased().hasSuffix(suffix) {
+                let version = String(normalized.dropLast(suffix.count))
+                return formattedModelName(version, family: .unknown) + " " + familyName
+            }
         }
-        return value
+        if normalized.lowercased().hasPrefix("gpt-") {
+            return "GPT-" + normalized.dropFirst(4)
+        }
+        return normalized
     }
 
     private static func strippedModelName(from label: String?, effort: String) -> String? {
@@ -324,6 +331,14 @@ enum CodexRadarPresentation {
         _ lhs: CodexRadarMatrixRow,
         _ rhs: CodexRadarMatrixRow
     ) -> Bool {
+        let leftVersion = lhs.displayName.split(separator: " ").first.map(String.init) ?? ""
+        let rightVersion = rhs.displayName.split(separator: " ").first.map(String.init) ?? ""
+        let leftIsGPT = leftVersion.hasPrefix("GPT-")
+        let rightIsGPT = rightVersion.hasPrefix("GPT-")
+        if leftIsGPT != rightIsGPT { return leftIsGPT }
+        if leftIsGPT, leftVersion != rightVersion {
+            return leftVersion.compare(rightVersion, options: .numeric) == .orderedDescending
+        }
         if lhs.family.sortOrder != rhs.family.sortOrder {
             return lhs.family.sortOrder < rhs.family.sortOrder
         }

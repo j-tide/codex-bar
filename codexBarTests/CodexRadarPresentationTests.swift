@@ -18,7 +18,7 @@ final class CodexRadarPresentationTests: XCTestCase {
 
         XCTAssertEqual(matrix.columns.map(\.id), ["low", "medium", "high", "xhigh", "max"])
         XCTAssertEqual(matrix.columns.map(\.label), ["low", "med", "high", "xh", "max"])
-        XCTAssertEqual(matrix.rows.map(\.displayName), ["Sol", "Terra", "Luna", "GPT-5.5"])
+        XCTAssertEqual(matrix.rows.map(\.displayName), ["GPT-5.6 Sol", "GPT-5.6 Terra", "GPT-5.6 Luna", "GPT-5.5"])
         XCTAssertNil(matrix.rows[1].cell(for: "max"))
         XCTAssertEqual(matrix.rows[1].cell(for: "high")?.score, 105)
     }
@@ -58,8 +58,8 @@ final class CodexRadarPresentationTests: XCTestCase {
         let effortMatrix = CodexRadarPresentation.matrix(from: effortWinner)
         let familyMatrix = CodexRadarPresentation.matrix(from: familyWinner)
 
-        XCTAssertEqual(effortMatrix.cell(id: effortMatrix.bestCellID)?.displayName, "Sol medium")
-        XCTAssertEqual(familyMatrix.cell(id: familyMatrix.bestCellID)?.displayName, "Sol max")
+        XCTAssertEqual(effortMatrix.cell(id: effortMatrix.bestCellID)?.displayName, "GPT-5.6 Sol medium")
+        XCTAssertEqual(familyMatrix.cell(id: familyMatrix.bestCellID)?.displayName, "GPT-5.6 Sol max")
     }
 
     func testTopThreeRanksRemainDistinctWhenScoresTie() {
@@ -75,7 +75,7 @@ final class CodexRadarPresentationTests: XCTestCase {
         let matrix = CodexRadarPresentation.matrix(from: modelIQ)
         let rankedNames = matrix.rankedCellIDs.prefix(3).compactMap { matrix.cell(id: $0)?.displayName }
 
-        XCTAssertEqual(rankedNames, ["Sol medium", "Luna max", "Sol max"])
+        XCTAssertEqual(rankedNames, ["GPT-5.6 Sol medium", "GPT-5.6 Luna max", "GPT-5.6 Sol max"])
         XCTAssertEqual(matrix.rank(of: try! XCTUnwrap(matrix.cell(id: matrix.rankedCellIDs[0]))), 1)
         XCTAssertEqual(matrix.rank(of: try! XCTUnwrap(matrix.cell(id: matrix.rankedCellIDs[1]))), 2)
         XCTAssertEqual(matrix.rank(of: try! XCTUnwrap(matrix.cell(id: matrix.rankedCellIDs[2]))), 3)
@@ -93,8 +93,31 @@ final class CodexRadarPresentationTests: XCTestCase {
         let matrix = CodexRadarPresentation.matrix(from: modelIQ)
 
         XCTAssertEqual(matrix.columns.map(\.id), ["low", "medium", "high", "xhigh", "max", "ultra"])
-        XCTAssertEqual(matrix.rows.map(\.displayName), ["GPT-5.5", "GPT-5.7"])
-        XCTAssertEqual(matrix.rows[1].cell(for: "ultra")?.score, 130)
+        XCTAssertEqual(matrix.rows.map(\.displayName), ["GPT-5.7", "GPT-5.5"])
+        XCTAssertEqual(matrix.rows[0].cell(for: "ultra")?.score, 130)
+    }
+
+    func testModelVersionsKeepSeparateRowsAndScoresAtTheSameEffort() {
+        let modelIQ = CodexRadarModelIQ(
+            latest: nil,
+            comparisons: [
+                "gpt-5.6-sol|high": comparison(model: "gpt-5.6-sol", effort: "high", score: 97),
+                "gpt-6-sol|high": comparison(model: "gpt-6-sol", effort: "high", score: 110),
+                "gpt-5.6-luna|max": comparison(model: "gpt-5.6-luna", effort: "max", score: 100),
+                "gpt-6-luna|max": comparison(model: "gpt-6-luna", effort: "max", score: 116)
+            ]
+        )
+
+        let matrix = CodexRadarPresentation.matrix(from: modelIQ)
+
+        XCTAssertEqual(matrix.rows.map(\.displayName), [
+            "GPT-6 Sol", "GPT-6 Luna", "GPT-5.6 Sol", "GPT-5.6 Luna"
+        ])
+        XCTAssertEqual(matrix.cells.count, 4)
+        XCTAssertEqual(matrix.rows[0].cell(for: "high")?.score, 110)
+        XCTAssertEqual(matrix.rows[1].cell(for: "max")?.score, 116)
+        XCTAssertEqual(matrix.rows[2].cell(for: "high")?.score, 97)
+        XCTAssertEqual(matrix.rows[3].cell(for: "max")?.score, 100)
     }
 
     func testMissingScoresAreTreatedAsUnavailableCells() {
@@ -142,10 +165,15 @@ final class CodexRadarPresentationTests: XCTestCase {
                 "sol_xhigh": comparison(model: "gpt-5.6-sol", effort: "xhigh", score: 105),
                 "sol_high": comparison(model: "gpt-5.6-sol", effort: "high", score: 105),
                 "sol_medium": comparison(model: "gpt-5.6-sol", effort: "medium", score: 120),
-                "sol_low": comparison(model: "gpt-5.6-sol", effort: "low", score: 90)
+                "sol_low": comparison(model: "gpt-5.6-sol", effort: "low", score: 90),
+                "gpt_6_sol_high": comparison(model: "gpt-6-sol", effort: "high", score: 110),
+                "gpt_6_luna_max": comparison(model: "gpt-6-luna", effort: "max", score: 116)
             ]
         )
         let matrix = CodexRadarPresentation.matrix(from: modelIQ)
+        XCTAssertEqual(matrix.rows.map(\.displayName), [
+            "GPT-6 Sol", "GPT-6 Luna", "GPT-5.6 Sol", "GPT-5.6 Terra", "GPT-5.6 Luna"
+        ])
         let content = VStack(alignment: .leading, spacing: 8) {
             CodexRadarTableView(matrix: matrix)
 
