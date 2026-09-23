@@ -12,6 +12,7 @@
 | **Multiple accounts** | Add accounts through browser OAuth or import account JSON. View identity, organization, and plan; refresh, reauthorize, or remove accounts. |
 | **Quotas and subscriptions** | The current implementation shows 5-hour / 7-day windows for Plus and a 7-day window for Pro. Toggle used / remaining values and inspect reset credits and expiry. Subscription dates come from the subscription endpoint, with stale results labeled. |
 | **Account switching** | Update local credentials alone, or switch and restart Codex. Account changes also synchronize with the local authentication file. |
+| **API providers** | Save and switch third-party accounts with a compatible Responses API, such as Zhipu. This affects the Codex CLI in Terminal, not the Codex desktop sign-in. |
 | **Model score matrix** | Compare Codex Radar scores weighted across software and visual-spatial evaluations. Refreshes every 15 minutes; failures retain the last successful result from the current app session. |
 | **Local usage statistics** | Count timestamped token increments by local date, including cached input, with distinct session counts, a 30-day curve, and a 16-week heatmap. |
 | **Native appearance** | A two-column panel with light / dark themes and instant English / Chinese switching. Uses Liquid Glass on macOS 26 and system material fallbacks on earlier versions. |
@@ -55,6 +56,8 @@ When switching accounts:
 - **Switch only** updates the local authentication file. A running Codex instance uses the new account when it next reads its credentials.
 - **Switch and restart Codex** updates credentials and restarts Codex to apply them immediately. This interrupts running tasks.
 
+Use **API Key** in the footer to add a third-party API provider. Choose a preset, enter its key and model, optionally verify the connection, then save and activate it. Restoring the official provider removes the override from `config.toml`. This affects the Codex CLI in Terminal, usually on its next launch; it does not switch your Codex desktop account.
+
 ### 3. Connect task activity
 
 Follow the **Install hooks** prompt in the task activity section. The installer backs up `~/.codex/hooks.json`, merges the required entries, and preserves other hooks. The status script uses `/usr/bin/python3`.
@@ -72,6 +75,7 @@ codex-bar runs on your Mac without a separate backend. It reads local Codex stat
 | Data | Source and purpose |
 | :--- | :--- |
 | Account pool and active account | `~/.codex/token_pool.json` and `~/.codex/auth.json`; may be written when adding, refreshing, or switching accounts. |
+| Third-party API providers | Accounts and API keys are stored in `~/.codex/codexbar/provider_accounts.json`. Activation updates `~/.codex/config.toml` after creating a local backup. These files contain keys and are restricted to the local user. |
 | Quotas and subscriptions | ChatGPT / Codex endpoints for quotas, account identity, subscription dates, and available reset credits. |
 | Task activity | Hook state in `~/.codex/codexbar/sessions/`, combined with local SQLite, the task index, and `.codex-global-state.json` for titles, ordering, and unread state. |
 | Token statistics | Local SQLite locates session logs; timestamped JSONL usage increments drive the totals. The index cache in `~/Library/Caches/codexAppBar/` does not store prompts, replies, or credentials. |

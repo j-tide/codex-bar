@@ -227,6 +227,10 @@ enum L {
     }
     static var switchOnly: String      { zh ? "仅切换（不退出）" : "Switch Only" }
     static var switchAndRestart: String { zh ? "切换并重启 Codex" : "Switch & Restart" }
+    static var switchAlsoRemovesProvider: String {
+        zh ? "检测到 API 通道处于激活状态：本次切换会同时移除 config.toml 里的 provider 覆盖，恢复官方通道。"
+           : "An API provider is currently active: switching will also remove the provider override in config.toml and restore the official channel."
+    }
     static var cannotActivateNoIdToken: String {
         zh ? "该账号缺少 id_token 且无法续期，请重新授权后再激活" : "This account has no id_token and could not refresh; re-authorize before activating"
     }
@@ -438,4 +442,60 @@ enum L {
 
     static var modelQualityReading: String { zh ? "正在读取 codexradar.com" : "Reading codexradar.com" }
     static var modelQualityNoData: String { zh ? "暂无模型质量数据" : "No model quality data" }
+
+    // MARK: - Provider accounts (API 通道)
+    static var providerSectionTitle: String { zh ? "API 通道" : "API Providers" }
+    static var providerCLIBadge: String { zh ? "仅 CLI" : "CLI only" }
+    static var providerDesktopNote: String {
+        zh ? "Codex 桌面端固定使用 ChatGPT 账号；此配置只对终端里的 codex CLI 生效"
+           : "Codex desktop always uses the ChatGPT account; this config only applies to the codex CLI"
+    }
+    static var providerDesktopAlertTitle: String { zh ? "Codex 桌面端正在运行" : "Codex desktop is running" }
+    static var providerDesktopAlertInfo: String {
+        zh
+            ? "桌面端不会读取第三方 provider 配置，仍将使用 ChatGPT 账号对话。\n此配置只对终端里的 codex CLI 生效（CLI 下次启动时生效）。"
+            : "The desktop app ignores third-party provider config and keeps using your ChatGPT account.\nThis config only applies to the codex CLI (effective on its next launch)."
+    }
+    static var providerActivateAnyway: String { zh ? "仍要激活" : "Activate Anyway" }
+    static func providerActivated(_ model: String) -> String {
+        zh ? "已激活 \(model)，终端 codex 下次启动生效" : "Activated \(model); applies on the next codex CLI launch"
+    }
+    static var providerAdd: String { zh ? "添加 API 账号" : "Add API Account" }
+    static var providerToolbarButton: String { zh ? "API Key" : "API Key" }
+    static var providerToolbarHelp: String {
+        zh ? "配置智谱 GLM 等第三方 API 通道（仅对终端 codex CLI 生效）"
+           : "Configure third-party API providers like Zhipu GLM (codex CLI only)"
+    }
+    static var providerSaved: String { zh ? "API 账号已保存" : "API account saved" }
+    static var providerRestoreOfficial: String { zh ? "恢复官方" : "Restore Official" }
+    static var providerRestoreHelp: String {
+        zh ? "移除 provider 覆盖，恢复 Codex 官方通道与原 model" : "Remove the provider override and restore the official Codex channel and model"
+    }
+    static var providerRestoreTitle: String { zh ? "恢复官方通道？" : "Restore official channel?" }
+    static var providerRestoreInfo: String {
+        zh ? "将移除 config.toml 中的 model_provider 覆盖，并还原之前备份的官方 model。"
+           : "This removes the model_provider override in config.toml and restores the backed-up official model."
+    }
+    static var providerRestored: String { zh ? "已恢复官方通道" : "Official channel restored" }
+    static var providerEdit: String { zh ? "编辑" : "Edit" }
+    static var providerCurrentBadge: String { zh ? "当前通道" : "Active" }
+    static var providerFieldName: String { zh ? "名称" : "Name" }
+    static var providerFieldID: String { zh ? "通道 ID" : "Provider ID" }
+    static var providerFieldNamePlaceholder: String { zh ? "如：智谱 GLM" : "e.g. Zhipu GLM" }
+    static var providerFieldKey: String { zh ? "API Key" : "API Key" }
+    static var providerFieldModel: String { zh ? "模型" : "Model" }
+    static var providerModelSuggestions: String { zh ? "从服务商拉取的模型列表" : "Models fetched from the provider" }
+    static var providerProtocolHelp: String {
+        zh ? "当前 Codex CLI 仅支持 Responses API；旧 Chat 账号不可激活"
+           : "The current Codex CLI supports only the Responses API; legacy Chat accounts cannot be activated"
+    }
+    static var providerVerify: String { zh ? "验证连接" : "Verify" }
+    static var providerVerifying: String { zh ? "验证中" : "Verifying" }
+    static func providerVerifyOK(_ n: Int) -> String {
+        zh ? "连接成功 · \(n) 个模型" : "Connected · \(n) models"
+    }
+    static func providerVerifyFailed(_ reason: String) -> String {
+        zh ? "验证失败：\(reason)" : "Verification failed: \(reason)"
+    }
+    static var providerSave: String { zh ? "保存" : "Save" }
 }

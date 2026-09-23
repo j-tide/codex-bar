@@ -301,6 +301,11 @@ final class CompactPopoverTests: XCTestCase {
                 .environmentObject(LanguageSettings.shared).environmentObject(RefreshFrequencySettings.shared)
                 .environmentObject(QuotaDisplaySettings.shared).environmentObject(tasks)
                 .environmentObject(CodexHookInstallerService.shared).environmentObject(AppUpdateService.shared)
+                .environmentObject(ProviderAccountStore(
+                    storeURL: root.appendingPathComponent("provider-accounts.json"),
+                    configService: CodexProviderConfigService(
+                        configURL: root.appendingPathComponent("config.toml"),
+                        modelsURL: root.appendingPathComponent("models.json"))))
                 .environment(\.colorScheme, .dark)
             let renderer = ImageRenderer(content: content)
             renderer.scale = 2
