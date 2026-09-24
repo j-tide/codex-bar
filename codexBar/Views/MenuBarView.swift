@@ -32,7 +32,6 @@ struct MenuBarView: View {
     @EnvironmentObject var codexHookInstaller: CodexHookInstallerService
     @EnvironmentObject var appUpdater: AppUpdateService
     @ObservedObject private var radar = CodexRadarService.shared
-    @EnvironmentObject private var providerStore: ProviderAccountStore
     @State private var isRefreshing = false
     @State private var showError: String?
     @State private var showSuccess: String?
@@ -65,12 +64,8 @@ struct MenuBarView: View {
         min(PopupLayout.activityHeight, store.accounts.count >= 3 ? 336 : store.accounts.count == 2 ? 280 : 190)
     }
 
-    private var providerSectionHeight: CGFloat {
-        ProviderAccountsSection.height(accounts: providerStore.accounts.count, isEditing: providerStore.isEditingForm)
-    }
-
     private var contentHeight: CGFloat {
-        max(taskSectionHeight, accountSectionHeight) + providerSectionHeight + insightsHeight + 1
+        max(taskSectionHeight, accountSectionHeight) + insightsHeight + 1
     }
 
     private var insightsHeight: CGFloat {
@@ -138,22 +133,6 @@ struct MenuBarView: View {
                 VStack(spacing: 0) {
                     accountSection.popupEntrance(delay: 0.04)
                         .frame(maxHeight: .infinity)
-                    if providerStore.isEditingForm || !providerStore.accounts.isEmpty {
-                        Divider()
-                        ProviderAccountsSection(
-                            store: providerStore,
-                            onMessage: { message in
-                                showSuccess = message
-                                showError = nil
-                            },
-                            onError: { message in
-                                showError = message
-                                showSuccess = nil
-                            }
-                        )
-                        .popupEntrance(delay: 0.08)
-                        .frame(height: providerSectionHeight, alignment: .top)
-                    }
                     Divider()
                     TokenStatsView().popupEntrance(delay: 0.12)
                         .frame(height: insightsHeight)
@@ -249,17 +228,6 @@ struct MenuBarView: View {
                     .buttonStyle(.borderless)
                     .focusable(false)
                     .help(L.importAccount)
-
-                    Button {
-                        providerStore.isEditingForm = true
-                    } label: {
-                        Label(L.providerToolbarButton, systemImage: "key.horizontal")
-                            .font(.system(size: 12))
-                            .frame(height: 18, alignment: .center)
-                    }
-                    .buttonStyle(.borderless)
-                    .focusable(false)
-                    .help(L.providerToolbarHelp)
                 }
 
                 Divider().frame(height: 14).padding(.horizontal, 12)
@@ -530,10 +498,8 @@ struct MenuBarView: View {
 
         // Codex 没跑：直接切，不打扰
         guard !running.isEmpty else {
-            do {
-                try restoreOfficialChannelIfNeeded()
-                try store.activate(key)
-            } catch { showError = error.localizedDescription }
+            do { try store.activate(key) }
+            catch { showError = error.localizedDescription }
             return
         }
 
@@ -542,9 +508,7 @@ struct MenuBarView: View {
         // - 切换并重启：写 auth.json + 强退重开 Codex（立即生效，但中断进行中的任务）
         let alert = NSAlert()
         alert.messageText = L.switchModeTitle
-        alert.informativeText = providerStore.activeProviderKey == nil
-            ? L.switchModeInfo
-            : L.switchModeInfo + "\n\n" + L.switchAlsoRemovesProvider
+        alert.informativeText = L.switchModeInfo
         alert.addButton(withTitle: L.switchOnly)         // .alertFirstButtonReturn
         alert.addButton(withTitle: L.switchAndRestart)   // .alertSecondButtonReturn
         alert.addButton(withTitle: L.cancel)             // .alertThirdButtonReturn
@@ -552,7 +516,6 @@ struct MenuBarView: View {
         guard resp != .alertThirdButtonReturn else { return }
 
         do {
-            try restoreOfficialChannelIfNeeded()
             try store.activate(key)
         } catch {
             showError = error.localizedDescription
@@ -561,16 +524,6 @@ struct MenuBarView: View {
         if resp == .alertSecondButtonReturn {
             forceQuitCodexAndReopen(running)
         }
-    }
-
-    /// 切回 ChatGPT 账号时必须移除 config.toml 里的 provider 覆盖：
-    /// model_provider 还钉在第三方通道上的话，即使写好了 auth.json，
-    /// Codex（CLI 与桌面端）仍然走 provider，左下角也一直显示旧通道名。
-    private func restoreOfficialChannelIfNeeded() throws {
-        guard providerStore.activeProviderKey != nil else { return }
-        try providerStore.deactivateProvider()
-        showSuccess = L.providerRestored
-        showError = nil
     }
 
     private func installCodexHooks() {

@@ -391,7 +391,6 @@ private final class AppStatusBarController: NSObject {
                 .environmentObject(quotaDisplay)
                 .environmentObject(taskCenter)
                 .environmentObject(codexHookInstaller)
-                .environmentObject(ProviderAccountStore.shared)
                 .environmentObject(AppUpdateService.shared)),
             onSizeChange: { [weak popover] in popover?.resizeToFitContent() }
         )
