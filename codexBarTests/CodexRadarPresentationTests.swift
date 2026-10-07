@@ -120,28 +120,66 @@ final class CodexRadarPresentationTests: XCTestCase {
         XCTAssertEqual(matrix.rows[3].cell(for: "max")?.score, 100)
     }
 
-    func testMissingScoresAreTreatedAsUnavailableCells() {
+    func testMissingScoresKeepCatalogRowsAndEffortsWithoutEnteringRankings() {
         let modelIQ = CodexRadarModelIQ(
-            latest: CodexRadarModelIQEntry(model: "gpt-5.6-sol", reasoningEffort: "max"),
+            latest: CodexRadarModelIQEntry(model: "gpt-6.1-sol", reasoningEffort: "max"),
             comparisons: [
                 "terra_high": CodexRadarModelIQComparison(
                     label: "Terra high",
-                    model: "gpt-5.6-terra",
-                    reasoningEffort: "high",
-                    latest: CodexRadarModelIQEntry(model: "gpt-5.6-terra", reasoningEffort: "high")
+                    model: "gpt-7-nova",
+                    reasoningEffort: "adaptive",
+                    latest: CodexRadarModelIQEntry(model: "gpt-7-nova", reasoningEffort: "adaptive")
                 )
             ]
         )
 
         let matrix = CodexRadarPresentation.matrix(from: modelIQ)
 
-        XCTAssertTrue(matrix.rows.isEmpty)
+        XCTAssertEqual(matrix.rows.map(\.displayName), ["GPT-7-nova", "GPT-6.1 Sol"])
+        XCTAssertTrue(matrix.columns.contains { $0.id == "adaptive" })
+        XCTAssertTrue(matrix.cells.isEmpty)
         XCTAssertNil(matrix.bestCellID)
     }
 
     func testScoreFormattingDropsMeaninglessDecimalOnly() {
         XCTAssertEqual(CodexRadarPresentation.scoreText(105), "105")
         XCTAssertEqual(CodexRadarPresentation.scoreText(112.5), "112.5")
+    }
+
+    func testRankedCellsUsePreciseDescendingScoresAndKeepRealZero() {
+        let modelIQ = CodexRadarModelIQ(latest: nil, comparisons: [
+            "sol-low": comparison(model: "gpt-6.1-sol", effort: "low", score: 75),
+            "sol-medium": comparison(model: "gpt-6.1-sol", effort: "medium", score: 0),
+            "astra-high": comparison(model: "gpt-6-astra", effort: "high", score: 73.54),
+            "future-adaptive": comparison(model: "gpt-7-nova", effort: "adaptive", score: 73.51),
+            "ungraded": CodexRadarModelIQComparison(label: nil, model: "gpt-8-orion", reasoningEffort: "deep",
+                                                     latest: CodexRadarModelIQEntry())
+        ])
+        let matrix = CodexRadarPresentation.matrix(from: modelIQ)
+
+        XCTAssertEqual(matrix.cells.map(\.displayName), [
+            "GPT-6.1 Sol low", "GPT-6 Astra high", "GPT-7-nova adaptive", "GPT-6.1 Sol medium"
+        ])
+        XCTAssertEqual(matrix.cells.map(\.score), [75, 73.54, 73.51, 0])
+        XCTAssertEqual(matrix.rows.count, 4, "Unscored catalog metadata remains available for discovery")
+    }
+
+    func testScoreHelpKeepsPreciseScoreCoverageAndRankForTheLastCatalogRow() throws {
+        let comparisons = Dictionary(uniqueKeysWithValues: (0..<40).map { index in
+            let model = "gpt-7.\(index)-sol"
+            let entry = CodexRadarModelIQEntry(score: 73.51 + Double(index) / 100, model: model,
+                                             reasoningEffort: "high", coverage: 12, requiredTasks: 64)
+            return (model, CodexRadarModelIQComparison(label: nil, model: model, reasoningEffort: "high", latest: entry))
+        })
+        let matrix = CodexRadarPresentation.matrix(from: CodexRadarModelIQ(latest: nil, comparisons: comparisons))
+        let row = try XCTUnwrap(matrix.rows.last)
+        let cell = try XCTUnwrap(row.cell(for: "high"))
+        let help = CodexRadarPresentation.scoreHelp(for: cell, rank: matrix.rank(of: cell))
+        XCTAssertEqual(matrix.rank(of: cell), 40)
+        XCTAssertTrue(help.contains(cell.displayName))
+        XCTAssertTrue(help.contains("73.51"))
+        XCTAssertTrue(help.contains("12/64"))
+        XCTAssertTrue(help.contains("40"))
     }
 
     func testFamilyResolutionUsesNativeSymbolMetadata() {
@@ -178,7 +216,7 @@ final class CodexRadarPresentationTests: XCTestCase {
             CodexRadarTableView(matrix: matrix)
 
             if let best = matrix.cell(id: matrix.bestCellID) {
-                Text("第 1 名：\(best.displayName) · IQ \(CodexRadarPresentation.scoreText(best.score)) · 通过 8/10 题")
+                Text("第 1 名：\(best.displayName) · \(CodexRadarPresentation.scoreText(best.score))")
                     .font(.system(size: 9.5, weight: .medium))
                     .foregroundColor(.secondary)
             }

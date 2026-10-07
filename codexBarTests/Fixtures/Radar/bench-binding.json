@@ -1,0 +1,153 @@
+{
+  "enabled": true,
+  "interface_confirmed": true,
+  "production_read_verified": true,
+  "benchmark": "radar-bench-final64-20261004",
+  "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+  "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+  "total_tasks": 64,
+  "source_counts": {
+    "deepswe": 15,
+    "pompeii": 16,
+    "tb4": 14,
+    "science": 19
+  },
+  "model_efforts": [
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "low"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "medium"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "high"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "xhigh"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "max"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "ultra"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "low"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "medium"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "xhigh"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "max"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "ultra"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "low"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "medium"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "high"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "xhigh"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "max"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "ultra"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "low"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "medium"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "high"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "xhigh"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "max"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "low"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "medium"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "high"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "max"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "ultra"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "medium"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "high"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "xhigh"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "max"
+    }
+  ]
+}

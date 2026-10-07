@@ -1,0 +1,20 @@
+{
+  "schema": "radar-bench-public-summary-v1",
+  "benchmark": "radar-bench-final64-20261004",
+  "score_version": "radar-bench-v1",
+  "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+  "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "score": null,
+  "coverage": 0,
+  "required_tasks": 64,
+  "score_status": "missing_current_result",
+  "source_counts": {
+    "deepswe": 15,
+    "pompeii": 16,
+    "tb4": 14,
+    "science": 19
+  },
+  "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+}

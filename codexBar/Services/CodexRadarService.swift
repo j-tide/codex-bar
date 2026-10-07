@@ -65,10 +65,33 @@ final class CodexRadarService: ObservableObject {
 
     private func refreshIntelligence() async {
         do {
-            async let softwareData = fetch(URL(string: "https://codexradar.com/api/intelligence-efficiency-metrics")!, requireCurrent: true)
-            async let visualData = fetch(URL(string: "https://codexradar.com/api/visual-spatial-reasoning")!, requireCurrent: true)
-            let report = try await CodexRadarIntelligenceReport.decode(software: softwareData, visual: visualData)
-            intelligence = report
+            let bindingData = try await fetch(URL(string: "https://codexradar.com/data/radar-bench-binding.json")!)
+            let binding = try CodexRadarBenchBinding.decode(bindingData)
+            var summaries: [CodexRadarSelection: CodexRadarBenchSummary] = [:]
+            var firstError: Error?
+            await withTaskGroup(of: (CodexRadarSelection, Result<Data, Error>).self) { group in
+                for selection in binding.selections {
+                    var url = URLComponents(string: "https://codexradar.com/api/radar-bench-score")!
+                    url.queryItems = [
+                        URLQueryItem(name: "model", value: selection.model),
+                        URLQueryItem(name: "effort", value: selection.effort),
+                        URLQueryItem(name: "view", value: "summary")
+                    ]
+                    let requestURL = url.url!
+                    group.addTask { (selection, await self.fetchQualityData(requestURL)) }
+                }
+                for await (selection, result) in group {
+                    do {
+                        summaries[selection] = try CodexRadarBenchSummary.decode(
+                            result.get(), binding: binding, selection: selection
+                        )
+                    } catch {
+                        if firstError == nil { firstError = error }
+                    }
+                }
+            }
+            guard !summaries.isEmpty else { throw firstError ?? CodexRadarError.modelQualityUnavailable }
+            intelligence = CodexRadarIntelligenceReport(binding: binding, summaries: summaries)
             lastFetchAt = Date()
             lastError = nil
         } catch {
@@ -76,21 +99,26 @@ final class CodexRadarService: ObservableObject {
         }
     }
 
-    private func fetch(_ url: URL, requireCurrent: Bool = false) async throws -> Data {
+    private func fetchQualityData(_ url: URL) async -> Result<Data, Error> {
+        do { return .success(try await fetch(url)) }
+        catch { return .failure(error) }
+    }
+
+    private func fetch(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url)
         request.timeoutInterval = 15
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse else {
             throw CodexRadarError.invalidResponse
         }
-        if requireCurrent {
-            let cache = http.value(forHTTPHeaderField: "X-Codex-Cache") ?? ""
-            guard !cache.isEmpty, !cache.hasPrefix("STALE"), cache != "ERROR" else {
-                throw CodexRadarError.staleResponse
-            }
+        guard (200..<300).contains(http.statusCode) else {
+            throw CodexRadarError.httpStatus(http.statusCode)
+        }
+        let cache = http.value(forHTTPHeaderField: "X-Radar-Bench-Cache") ?? ""
+        if cache.hasPrefix("STALE") || cache == "ERROR" {
+            throw CodexRadarError.staleResponse
         }
         return data
     }
@@ -115,6 +143,7 @@ final class CodexRadarService: ObservableObject {
 
 enum CodexRadarError: LocalizedError {
     case invalidResponse
+    case httpStatus(Int)
     case modelQualityUnavailable
     case staleResponse
 
@@ -122,6 +151,8 @@ enum CodexRadarError: LocalizedError {
         switch self {
         case .invalidResponse:
             return L.zh ? "CodexRadar 响应无效" : "Invalid CodexRadar response"
+        case .httpStatus(let status):
+            return L.zh ? "CodexRadar 服务暂不可用 (HTTP \(status))" : "CodexRadar unavailable (HTTP \(status))"
         case .staleResponse:
             return L.zh ? "数据源暂未更新，请稍后重试" : "Source data is stale. Try again later."
         case .modelQualityUnavailable:
@@ -253,6 +284,8 @@ struct CodexRadarModelIQEntry: Decodable {
     let tasks: Int?
     let model: String?
     let reasoningEffort: String?
+    let coverage: Int?
+    let requiredTasks: Int?
 
     enum CodingKeys: String, CodingKey {
         case date
@@ -262,6 +295,8 @@ struct CodexRadarModelIQEntry: Decodable {
         case tasks
         case model
         case reasoningEffort = "reasoning_effort"
+        case coverage
+        case requiredTasks = "required_tasks"
     }
 
     init(
@@ -271,7 +306,9 @@ struct CodexRadarModelIQEntry: Decodable {
         passed: Int? = nil,
         tasks: Int? = nil,
         model: String? = nil,
-        reasoningEffort: String? = nil
+        reasoningEffort: String? = nil,
+        coverage: Int? = nil,
+        requiredTasks: Int? = nil
     ) {
         self.date = date
         self.score = score
@@ -280,125 +317,7 @@ struct CodexRadarModelIQEntry: Decodable {
         self.tasks = tasks
         self.model = model
         self.reasoningEffort = reasoningEffort
-    }
-}
-
-// Mirrors codexradar.com's comprehensive score: weight both dimensions by valid tasks.
-enum CodexRadarDimension: String, CaseIterable, Identifiable {
-    case comprehensive, software, visual
-
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .comprehensive: return L.zh ? "综合智能" : "Overall"
-        case .software: return L.zh ? "软件工程" : "Coding"
-        case .visual: return L.zh ? "空间推理" : "Spatial"
-        }
-    }
-}
-
-struct CodexRadarMetricsPayload: Decodable {
-    let schema: Int
-    let mode: String
-    let type: String?
-    let sourceUpdatedAt: String?
-    let points: [Point]
-
-    enum CodingKeys: String, CodingKey {
-        case schema, mode, type, points
-        case sourceUpdatedAt = "source_updated_at"
-    }
-
-    struct Point: Decodable {
-        let model: String
-        let effort: String
-        let iq: Double?
-        let total: Double?
-        let weightedTotal: Double?
-        let validTasks: Double?
-
-        enum CodingKeys: String, CodingKey {
-            case model, effort, iq, total
-            case weightedTotal = "weighted_total"
-            case validTasks = "valid_tasks"
-        }
-
-        var key: String { "\(model)|\(effort)" }
-    }
-}
-
-struct CodexRadarIntelligenceReport {
-    let software: CodexRadarMetricsPayload
-    let visual: CodexRadarMetricsPayload
-
-    static func decode(software: Data, visual: Data) throws -> Self {
-        let decoder = JSONDecoder()
-        let report = try Self(
-            software: decoder.decode(CodexRadarMetricsPayload.self, from: software),
-            visual: decoder.decode(CodexRadarMetricsPayload.self, from: visual)
-        )
-        guard (report.software.schema == 3 && report.software.mode == "equal_latest_3"
-                || report.software.schema == 2 && report.software.mode == "weighted_latest_3"),
-              report.visual.type == "visual_spatial_reasoning_summary",
-              !report.modelIQ(for: .comprehensive).comparisons.isEmpty else {
-            throw CodexRadarError.modelQualityUnavailable
-        }
-        return report
-    }
-
-    func updatedAt(for dimension: CodexRadarDimension) -> Date? {
-        let softwareDate = Self.date(software.sourceUpdatedAt)
-        let visualDate = Self.date(visual.sourceUpdatedAt)
-        switch dimension {
-        case .software: return softwareDate
-        case .visual: return visualDate
-        case .comprehensive:
-            guard let softwareDate, let visualDate else { return nil }
-            return min(softwareDate, visualDate)
-        }
-    }
-
-    func modelIQ(for dimension: CodexRadarDimension) -> CodexRadarModelIQ {
-        let softwarePoints = validPoints(software, isSoftware: true)
-        let visualPoints = validPoints(visual, isSoftware: false)
-        var comparisons: [String: CodexRadarModelIQComparison] = [:]
-        let points = dimension == .visual ? visualPoints : softwarePoints
-        for (key, point) in points {
-            guard let iq = point.iq else { continue }
-            var score = iq
-            if dimension == .comprehensive {
-                guard let other = visualPoints[key], let visualIQ = other.iq else { continue }
-                let softwareWeight = max(1, weight(point, isSoftware: true))
-                let visualWeight = max(1, weight(other, isSoftware: false))
-                score = (iq * softwareWeight + visualIQ * visualWeight) / (softwareWeight + visualWeight)
-            }
-            let entry = CodexRadarModelIQEntry(score: score, model: point.model, reasoningEffort: point.effort)
-            comparisons[key] = CodexRadarModelIQComparison(
-                label: nil, model: point.model, reasoningEffort: point.effort, latest: entry
-            )
-        }
-        return CodexRadarModelIQ(latest: nil, comparisons: comparisons)
-    }
-
-    private func validPoints(_ payload: CodexRadarMetricsPayload, isSoftware: Bool) -> [String: CodexRadarMetricsPayload.Point] {
-        var result: [String: CodexRadarMetricsPayload.Point] = [:]
-        for point in payload.points {
-            // The app's quality section covers Codex models, as in the reference board.
-            guard point.model.hasPrefix("gpt-"), !point.effort.isEmpty,
-                  let iq = point.iq, iq.isFinite, iq >= 0,
-                  weight(point, isSoftware: isSoftware) > 0 else { continue }
-            result[point.key] = point
-        }
-        return result
-    }
-
-    private func weight(_ point: CodexRadarMetricsPayload.Point, isSoftware: Bool) -> Double {
-        if isSoftware { return (software.schema == 2 ? point.weightedTotal : point.total) ?? 0 }
-        return point.validTasks ?? 0
-    }
-
-    private static func date(_ value: String?) -> Date? {
-        guard let value else { return nil }
-        return DateFormatters.iso8601WithFractionalSeconds.date(from: value) ?? DateFormatters.iso8601.date(from: value)
+        self.coverage = coverage
+        self.requiredTasks = requiredTasks
     }
 }

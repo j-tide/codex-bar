@@ -4,7 +4,8 @@ import SwiftUI
 struct CodexRadarView: View {
     @Environment(\.popupLiveUpdates) private var liveUpdates
     @EnvironmentObject var language: LanguageSettings
-    @ObservedObject private var radar = CodexRadarService.shared
+    @ObservedObject var radar = CodexRadarService.shared
+    var maximumHeight: CGFloat = 360
 
     var body: some View {
         let _ = language.identity
@@ -12,6 +13,7 @@ struct CodexRadarView: View {
             report: radar.intelligence,
             isRefreshing: radar.isRefreshing,
             error: radar.lastError,
+            maximumHeight: maximumHeight,
             refresh: { Task { await radar.refresh() } },
             openSource: { NSWorkspace.shared.open(radar.homepageURL) }
         )
@@ -22,16 +24,27 @@ struct CodexRadarView: View {
 }
 
 struct CodexRadarQualityContent: View {
+    static func panelHeight(rowCount: Int, isPartial: Bool, maximumHeight: CGFloat = 360) -> CGFloat {
+        let partialNoticeHeight: CGFloat = isPartial ? 24 : 0
+        return min(max(0, maximumHeight), max(252, CodexRadarTableView.height(rowCount: rowCount) + 96 + partialNoticeHeight))
+    }
+
     @AppStorage("languageOverride") private var chinese = L.systemIsChinese
     let report: CodexRadarIntelligenceReport?
     let isRefreshing: Bool
     let error: String?
+    var maximumHeight: CGFloat = 360
     var refresh: () -> Void = {}
     var openSource: () -> Void = {}
     @State private var showsScoreExplanation = false
 
     private var matrix: CodexRadarMatrix {
-        CodexRadarPresentation.matrix(from: report?.modelIQ(for: .comprehensive))
+        CodexRadarPresentation.matrix(from: report?.modelIQ)
+    }
+
+    private var tableViewportHeight: CGFloat {
+        min(CodexRadarTableView.height(rowCount: matrix.rows.count),
+            max(0, maximumHeight - 96 - (report?.isPartial == true ? 24 : 0)))
     }
 
     var body: some View {
@@ -39,14 +52,29 @@ struct CodexRadarQualityContent: View {
         VStack(alignment: .leading, spacing: 10) {
             header
 
+            if report?.isPartial == true {
+                Text(L.radarPartialDataNotice)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if matrix.rows.isEmpty {
                 emptyState
             } else {
-                CodexRadarTableView(matrix: matrix).zIndex(1)
+                Group {
+                    if tableViewportHeight < CodexRadarTableView.height(rowCount: matrix.rows.count) {
+                        ScrollView(.vertical) { CodexRadarTableView(matrix: matrix) }
+                            .frame(height: tableViewportHeight)
+                    } else {
+                        CodexRadarTableView(matrix: matrix)
+                    }
+                }
+                .zIndex(1)
+                Text(L.radarGradedSelections(scored: matrix.cells.count, total: report?.binding.selections.count ?? 0))
+                    .font(.system(size: 9)).foregroundStyle(.secondary)
+                    .help(L.radarMatrixNotice)
                 footer
-                Text(L.zh ? "显示取整 · 悬停查看原始分数与排名依据" : "Rounded values · hover for precise scores and ranking")
-                    .font(.system(size: 8)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -62,7 +90,7 @@ struct CodexRadarQualityContent: View {
                 .accessibilityHidden(true)
             Text(L.radarScoreTitle)
                 .font(.system(size: 13, weight: .medium))
-            Text("IQ").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text("RadarBench").font(.system(size: 9)).foregroundStyle(.secondary)
             Button {
                 showsScoreExplanation.toggle()
             } label: {
@@ -126,15 +154,10 @@ struct CodexRadarQualityContent: View {
                     .foregroundStyle(.secondary)
                     .help(error ?? "")
             } else {
-                Text("Codex Radar")
+                Text("Codex Radar · RadarBench v1")
                     .foregroundStyle(.secondary)
             }
-            if let date = report?.updatedAt(for: .comprehensive) {
-                Text(date, format: .dateTime.month(.twoDigits).day(.twoDigits).hour().minute())
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .help(L.radarScoreUpdated)
-            }
+            Text(L.radarPublicSummary).foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
         .font(.system(size: 9))
@@ -158,14 +181,12 @@ struct CodexRadarQualityContent: View {
     }
 }
 
-/// All model rows remain visible; columns share the available width without scrolling.
+/// Every catalog model remains visible; the parent bounds the viewport and scrolls tall tables.
 struct CodexRadarTableView: View {
     @AppStorage("languageOverride") private var chinese = L.systemIsChinese
     @Environment(\.colorScheme) private var colorScheme
     let matrix: CodexRadarMatrix
-    @State private var hoveredID: String?
     private let modelWidth: CGFloat = 82
-    private let rowHeight: CGFloat = 28
     static func height(rowCount: Int) -> CGFloat { 20 + CGFloat(rowCount) * 30 }
 
     var body: some View {
@@ -198,49 +219,13 @@ struct CodexRadarTableView: View {
                         .help(row.displayName)
                         ForEach(matrix.columns) { column in
                             score(row.cell(for: column.id), row: row, effort: column.id)
-                                .frame(width: cellWidth, height: rowHeight)
+                                .frame(width: cellWidth, height: 28)
                         }
                     }
                 }
             }
-            .overlay(alignment: .topLeading) {
-                if let cell = matrix.cell(id: hoveredID),
-                   let row = matrix.rows.firstIndex(where: { $0.id == cell.rowID }),
-                   let column = matrix.columns.firstIndex(where: { $0.id == cell.effort }) {
-                    let width = min(236, geometry.size.width)
-                    let x = min(max(0, modelWidth + CGFloat(column) * cellWidth - width / 2 + cellWidth / 2), geometry.size.width - width)
-                    scoreTooltip(cell)
-                        .frame(width: width)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .offset(x: x, y: row >= 2 ? max(0, CGFloat(row) * 30 - 110) : CGFloat(row) * 30 + 52)
-                        .allowsHitTesting(false)
-                }
-            }
         }
         .frame(height: Self.height(rowCount: matrix.rows.count))
-    }
-
-    private func scoreTooltip(_ cell: CodexRadarMatrixCell) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(cell.displayName).font(.system(size: 10, weight: .semibold))
-                Spacer(minLength: 4)
-                if let rank = matrix.rank(of: cell) {
-                    Text(L.zh ? "第 \(rank) 名" : "Rank \(rank)")
-                        .font(.system(size: 9, weight: .medium))
-                }
-            }
-            Text("\(L.zh ? "原始 IQ" : "Raw IQ") \(String(format: "%.2f", cell.score))")
-                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
-            Text(L.zh ? "排名使用未取整分数；表格显示整数，因此相同整数可能有不同名次。" : "Ranks use unrounded scores. Equal displayed integers can have different ranks.")
-                .font(.system(size: 9)).foregroundStyle(.secondary)
-            Text(L.zh ? "综合分按软件工程与视觉空间推理的有效题量加权。" : "Overall IQ weights coding and spatial reasoning by valid task counts.")
-                .font(.system(size: 9)).foregroundStyle(.secondary)
-        }
-        .padding(9)
-        .background(PopupLayout.background, in: RoundedRectangle(cornerRadius: 7))
-        .overlay { RoundedRectangle(cornerRadius: 7).stroke(.primary.opacity(0.12), lineWidth: 0.5) }
-        .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
     }
 
     private func score(_ cell: CodexRadarMatrixCell?, row: CodexRadarMatrixRow, effort: String) -> some View {
@@ -266,12 +251,10 @@ struct CodexRadarTableView: View {
                 }
                 .padding(.bottom, 2)
                 .background {
-                    let hovered = hoveredID == cell.id
                     let tint = podium ? rankColor(rank) : Color.primary
                     let opacity = podium ? (colorScheme == .dark ? 0.22 : 0.16) : 0.035
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(LinearGradient(colors: [tint.opacity(opacity + (hovered ? 0.04 : 0)),
-                                                      tint.opacity(opacity * 0.65 + (hovered ? 0.04 : 0))],
+                        .fill(LinearGradient(colors: [tint.opacity(opacity), tint.opacity(opacity * 0.65)],
                                              startPoint: .topLeading, endPoint: .bottomTrailing))
                         .overlay {
                             if podium {
@@ -282,14 +265,14 @@ struct CodexRadarTableView: View {
                         .padding(.horizontal, 1)
                 }
                 .contentShape(Rectangle())
-                .onHover { hoveredID = $0 ? cell.id : nil }
+                .help(CodexRadarPresentation.scoreHelp(for: cell, rank: rank))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L.modelQualityCellAccessibility(
                     model: cell.displayName, score: String(format: "%.2f", cell.score),
-                    passCount: nil, rank: rank))
+                    coverage: cell.coverageText, rank: rank))
             } else {
                 Text("—").font(.system(size: 11)).foregroundStyle(.tertiary)
-                    .help(L.zh ? "\(row.displayName) \(effort)：暂无有效数据" : "\(row.displayName) \(effort): no valid data")
+                    .help(L.zh ? "\(row.displayName) \(effort)：暂无有效判分" : "\(row.displayName) \(effort): no valid grade")
             }
         }
     }
@@ -299,7 +282,8 @@ struct CodexRadarTableView: View {
         switch rank {
         case 1: return dark ? Color(red: 0.98, green: 0.76, blue: 0.28) : Color(red: 0.66, green: 0.43, blue: 0.03)
         case 2: return dark ? Color(red: 0.72, green: 0.80, blue: 0.92) : Color(red: 0.32, green: 0.40, blue: 0.51)
-        default: return dark ? Color(red: 0.94, green: 0.63, blue: 0.42) : Color(red: 0.62, green: 0.32, blue: 0.16)
+        case 3: return dark ? Color(red: 0.94, green: 0.63, blue: 0.42) : Color(red: 0.62, green: 0.32, blue: 0.16)
+        default: return .secondary
         }
     }
 }

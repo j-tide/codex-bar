@@ -98,6 +98,11 @@ struct CodexRadarMatrixCell: Identifiable {
         guard let passed = entry.passed, let tasks = entry.tasks else { return nil }
         return "\(passed)/\(tasks)"
     }
+
+    var coverageText: String? {
+        guard let coverage = entry.coverage, let required = entry.requiredTasks else { return nil }
+        return "\(coverage)/\(required)"
+    }
 }
 
 struct CodexRadarMatrixRow: Identifiable {
@@ -121,15 +126,14 @@ struct CodexRadarMatrix {
     }
 
     var cells: [CodexRadarMatrixCell] {
-        rows.flatMap { row in
-            columns.compactMap { row.cell(for: $0.id) }
-        }
+        let cellsByID = Dictionary(uniqueKeysWithValues: rows.flatMap { $0.cellsByEffort.values }.map { ($0.id, $0) })
+        return rankedCellIDs.compactMap { cellsByID[$0] }
     }
 
     var signature: String {
-        cells
+        (columns.map(\.id) + rows.map(\.id) + cells
             .map { "\($0.id):\(CodexRadarPresentation.scoreText($0.score))" }
-            .joined(separator: "|")
+        ).joined(separator: "|")
     }
 
     func cell(id: String?) -> CodexRadarMatrixCell? {
@@ -165,36 +169,34 @@ enum CodexRadarPresentation {
         }
 
         var cellsByID: [String: CodexRadarMatrixCell] = [:]
+        var rowMetadata: [String: (name: String, family: CodexRadarModelFamily)] = [:]
+        var efforts = Set<String>()
+
+        func include(sourceID: String, entry: CodexRadarModelIQEntry?, model: String?, effort: String?, label: String?, overwrite: Bool = false) {
+            let normalizedEffort = normalizeEffort(effort ?? effortFromLabel(label)) ?? "default"
+            let family = CodexRadarModelFamily.resolve(model: model, label: label, id: sourceID)
+            let identity = rowIdentity(model: model, label: label, effort: normalizedEffort, family: family)
+            rowMetadata[identity.id] = (identity.name, family)
+            efforts.insert(normalizedEffort)
+            guard let entry, let cell = makeCell(sourceID: sourceID, entry: entry, model: model, effort: normalizedEffort, label: label) else { return }
+            if overwrite || cellsByID[cell.id] == nil { cellsByID[cell.id] = cell }
+        }
 
         for sourceID in modelIQ.comparisons.keys.sorted() {
-            guard let comparison = modelIQ.comparisons[sourceID],
-                  let entry = comparison.latest,
-                  let cell = makeCell(
-                    sourceID: sourceID,
-                    entry: entry,
-                    model: comparison.model ?? entry.model,
-                    effort: comparison.reasoningEffort ?? entry.reasoningEffort,
-                    label: comparison.label
-                  ) else {
-                continue
-            }
-            if cellsByID[cell.id] == nil {
-                cellsByID[cell.id] = cell
-            }
+            guard let comparison = modelIQ.comparisons[sourceID] else { continue }
+            include(
+                sourceID: sourceID, entry: comparison.latest,
+                model: comparison.model ?? comparison.latest?.model,
+                effort: comparison.reasoningEffort ?? comparison.latest?.reasoningEffort,
+                label: comparison.label
+            )
         }
 
-        if let latest = modelIQ.latest,
-           let cell = makeCell(
-            sourceID: "latest",
-            entry: latest,
-            model: latest.model,
-            effort: latest.reasoningEffort,
-            label: nil
-           ) {
-            cellsByID[cell.id] = cell
+        if let latest = modelIQ.latest {
+            include(sourceID: "latest", entry: latest, model: latest.model, effort: latest.reasoningEffort, label: nil, overwrite: true)
         }
 
-        let extraEfforts = Set(cellsByID.values.map(\.effort))
+        let extraEfforts = efforts
             .subtracting(standardEfforts)
             .sorted()
         let columns = standardColumns + extraEfforts.enumerated().map { index, effort in
@@ -206,12 +208,12 @@ enum CodexRadarPresentation {
         }
 
         let groupedRows = Dictionary(grouping: cellsByID.values, by: \.rowID)
-        let rows = groupedRows.values.compactMap { cells -> CodexRadarMatrixRow? in
-            guard let sample = cells.first else { return nil }
+        let rows = rowMetadata.map { id, metadata in
+            let cells = groupedRows[id] ?? []
             return CodexRadarMatrixRow(
-                id: sample.rowID,
-                displayName: sample.rowName,
-                family: sample.family,
+                id: id,
+                displayName: metadata.name,
+                family: metadata.family,
                 cellsByEffort: Dictionary(uniqueKeysWithValues: cells.map { ($0.effort, $0) })
             )
         }
@@ -228,6 +230,22 @@ enum CodexRadarPresentation {
             return String(format: "%.0f", score)
         }
         return String(format: "%.1f", score)
+    }
+
+    static func scoreHelp(for cell: CodexRadarMatrixCell, rank: Int?) -> String {
+        var lines = [cell.displayName,
+                     "\(L.zh ? "原始分数" : "Raw score"): \(String(format: "%.2f", cell.score))"]
+        if let rank {
+            lines.append(L.zh ? "第 \(rank) 名" : "Rank \(rank)")
+        }
+        if let coverage = cell.coverageText {
+            lines.append(L.zh ? "覆盖 \(coverage) 题" : "Coverage: \(coverage) tasks")
+        }
+        lines.append(L.zh
+                     ? "排名使用未取整分数；表格显示整数，因此相同整数可能有不同名次。"
+                     : "Ranks use unrounded scores. Equal displayed integers can have different ranks.")
+        lines.append(L.radarBenchScoreMethod)
+        return lines.joined(separator: "\n")
     }
 
     private static var standardColumns: [CodexRadarMatrixColumn] {
@@ -254,7 +272,7 @@ enum CodexRadarPresentation {
         let identity = rowIdentity(model: model, label: label, effort: normalizedEffort, family: family)
 
         return CodexRadarMatrixCell(
-            id: "\(identity.id)|\(normalizedEffort)",
+            id: CodexRadarSelection(model: identity.id, effort: normalizedEffort).key,
             sourceID: sourceID,
             rowID: identity.id,
             rowName: identity.name,

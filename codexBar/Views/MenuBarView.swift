@@ -69,7 +69,7 @@ struct MenuBarView: View {
     }
 
     private var insightsHeight: CGFloat {
-        let rows = CodexRadarPresentation.matrix(from: radar.intelligence?.modelIQ(for: .comprehensive)).rows.count
+        let rows = CodexRadarPresentation.matrix(from: radar.intelligence?.modelIQ).rows.count
         // Include the radar header, footer, spacing and outer padding.
         return max(252, CodexRadarTableView.height(rowCount: rows) + 96)
     }

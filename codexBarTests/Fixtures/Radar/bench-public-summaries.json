@@ -1,0 +1,682 @@
+[
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6.1-sol",
+    "effort": "low",
+    "score": 75,
+    "coverage": 12,
+    "required_tasks": 64,
+    "score_status": "provisional",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6.1-sol",
+    "effort": "medium",
+    "score": 0,
+    "coverage": 1,
+    "required_tasks": 64,
+    "score_status": "provisional",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh",
+    "score": 0,
+    "coverage": 1,
+    "required_tasks": 64,
+    "score_status": "provisional",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6.1-sol",
+    "effort": "max",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6.1-sol",
+    "effort": "ultra",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-astra",
+    "effort": "low",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-astra",
+    "effort": "medium",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-astra",
+    "effort": "xhigh",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-astra",
+    "effort": "max",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-astra",
+    "effort": "ultra",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-sol",
+    "effort": "low",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-sol",
+    "effort": "medium",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-sol",
+    "effort": "high",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-sol",
+    "effort": "xhigh",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-sol",
+    "effort": "max",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-sol",
+    "effort": "ultra",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-luna",
+    "effort": "low",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-luna",
+    "effort": "medium",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-luna",
+    "effort": "xhigh",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-6-luna",
+    "effort": "max",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-sol",
+    "effort": "low",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-sol",
+    "effort": "medium",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-sol",
+    "effort": "high",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-sol",
+    "effort": "max",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-sol",
+    "effort": "ultra",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-luna",
+    "effort": "low",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  },
+  {
+    "schema": "radar-bench-public-summary-v1",
+    "benchmark": "radar-bench-final64-20261004",
+    "score_version": "radar-bench-v1",
+    "catalog_version": "dradar-four-library-deployment007-server024-20261004-config64",
+    "task_set_sha256": "f75ff09b6117cd83d3ab6ea744fe379ac117676c042538d5df5e38489af27bc4",
+    "model": "gpt-5.6-luna",
+    "effort": "max",
+    "score": null,
+    "coverage": 0,
+    "required_tasks": 64,
+    "score_status": "missing_current_result",
+    "source_counts": {
+      "deepswe": 15,
+      "pompeii": 16,
+      "tb4": 14,
+      "science": 19
+    },
+    "scoring_policy_version": "radar-bench-v1-last3-per-task-equal-weight-100"
+  }
+]

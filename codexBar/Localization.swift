@@ -375,14 +375,28 @@ enum L {
     }
     static var codexResetWindowFallback: String { zh ? "速蹬窗口已开启" : "Speedrun window is open" }
     static var codexResetWindowSourceHelp: String { zh ? "打开官方证据" : "Open official source" }
-    static var radarScoreTitle: String { zh ? "雷达智力分" : "Radar Intelligence" }
+    static var radarScoreTitle: String { zh ? "雷达分" : "Radar Score" }
     static var radarScoreExplanationTitle: String { zh ? "评分说明" : "About the score" }
     static var radarScoreMethod: String {
-        zh ? "Codex Radar 社区评测。综合智能按软件工程与视觉空间推理的有效题量加权，仅纳入两项均有成绩的模型档位。IQ 不是百分制；排名按原始分数，显示取整。"
-           : "Community benchmarks by Codex Radar. Overall IQ weights coding and spatial reasoning by valid tasks, requiring both dimensions. IQ is not a percentage. Ranks use unrounded scores."
+        zh ? "Codex Radar 的 RadarBench 社区评测，直接显示接口提供的 0–100 分成绩。各题最近三次有效样本等权，缺失题目不计零。模型为行，推理档位为列，随目录自动更新；暂无有效判分显示 —，真实零分保留。排名按原始分数，显示取整；悬停可查看原始分数与覆盖题数。公开接口不提供精确判分时间。"
+           : "Community RadarBench results from Codex Radar on the source's 0–100 scale. Each task's latest three valid samples have equal weight; missing tasks are not zero. Model rows and effort columns follow the catalog automatically. Ungraded selections show —; real zeroes remain. Ranks use raw scores; displayed values are rounded. Hover for precise scores and coverage. Exact grading times are not public."
     }
+    static var radarBenchScoreMethod: String {
+        zh ? "直接采用 RadarBench 原始成绩（0–100 分）；覆盖不足时为暂定成绩。"
+           : "Original RadarBench score (0–100); results with incomplete task coverage are provisional."
+    }
+    static var radarPartialDataNotice: String {
+        zh ? "部分档位读取失败 · 可刷新重试" : "Some results could not load · refresh to retry"
+    }
+    static var radarMatrixNotice: String {
+        zh ? "— 表示暂无有效判分；0 为有效分数。显示取整，悬停查看精确分数、覆盖题数和排名。"
+           : "— means no valid grade; 0 is a valid score. Values are rounded. Hover for precise scores, coverage and rank."
+    }
+    static func radarGradedSelections(scored: Int, total: Int) -> String {
+        zh ? "\(scored)/\(total) 个档位有成绩 · — 暂无评分" : "\(scored)/\(total) graded · — awaiting grades"
+    }
+    static var radarPublicSummary: String { zh ? "公开聚合成绩" : "Public scores" }
     static var radarScoreCached: String { zh ? "上次数据" : "Cached" }
-    static var radarScoreUpdated: String { zh ? "数据源更新时间" : "Source updated at" }
     static var modelQualityTitle: String { zh ? "模型质量" : "Model Quality" }
     static var modelQualityRefreshHelp: String { zh ? "刷新模型质量" : "Refresh model quality" }
     static var modelQualityOpenHelp: String { zh ? "打开 CodexRadar" : "Open CodexRadar" }
@@ -426,14 +440,14 @@ enum L {
     static func modelQualityCellAccessibility(
         model: String,
         score: String,
-        passCount: String?,
+        coverage: String?,
         rank: Int? = nil
     ) -> String {
         let prefix = rank.map { zh ? "第 \($0) 名，" : "No. \($0), " } ?? ""
-        guard let passCount else { return zh ? "\(prefix)\(model)，IQ \(score)" : "\(prefix)\(model), IQ \(score)" }
+        guard let coverage else { return zh ? "\(prefix)\(model)，雷达分 \(score)" : "\(prefix)\(model), Radar score \(score)" }
         return zh
-            ? "\(prefix)\(model)，IQ \(score)，通过 \(passCount) 题"
-            : "\(prefix)\(model), IQ \(score), \(passCount) passed"
+            ? "\(prefix)\(model)，雷达分 \(score)，覆盖 \(coverage) 题"
+            : "\(prefix)\(model), Radar score \(score), coverage \(coverage) tasks"
     }
 
     static var modelQualityReading: String { zh ? "正在读取 codexradar.com" : "Reading codexradar.com" }
