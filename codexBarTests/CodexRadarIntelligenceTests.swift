@@ -285,6 +285,55 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         XCTAssertLessThanOrEqual(size.height, 360)
     }
 
+    func testLargeCatalogKeepsTheFullMenuInsideACompactScreen() async throws {
+        let binding = try benchBindingData(selections: (0..<40).map { ("gpt-7.\($0)-sol", "high") })
+        RadarURLProtocol.respond = { request in
+            if request.url!.path == "/data/radar-bench-binding.json" { return (200, "", binding) }
+            if request.url!.path != "/api/radar-bench-score" { return (503, "", Data()) }
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            return (200, "HIT", try self.benchSummaryData(
+                binding: binding, model: query.first { $0.name == "model" }!.value!,
+                effort: query.first { $0.name == "effort" }!.value!, score: 73.5
+            ))
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RadarURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel(); RadarURLProtocol.respond = nil }
+        let service = CodexRadarService(session: session)
+        await service.refresh()
+        XCTAssertEqual(CodexRadarPresentation.matrix(from: service.intelligence?.modelIQ).rows.count, 40)
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let poolURL = root.appendingPathComponent("pool.json")
+        let accounts = (0..<3).map { TokenAccount(email: "preview\($0)@example.com", accountId: "preview-\($0)", planType: "pro10x") }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(TokenPool(accounts: accounts)).write(to: poolURL)
+        let store = TokenStore(poolURL: poolURL, authURL: root.appendingPathComponent("auth.json"))
+        let tasks = TaskCenterService(repository: TaskActivityRepository(
+            sessionsURL: root.appendingPathComponent("sessions"), legacyStatusURL: root.appendingPathComponent("legacy.json")
+        ), notificationService: TaskNotificationService(), now: Date.init)
+        defer { tasks.stop() }
+        let content = MenuBarView(liveUpdates: false, radar: service)
+            .environmentObject(store).environmentObject(OAuthManager.shared)
+            .environmentObject(LanguageSettings.shared).environmentObject(RefreshFrequencySettings.shared)
+            .environmentObject(QuotaDisplaySettings.shared).environmentObject(tasks)
+            .environmentObject(CodexHookInstallerService.shared).environmentObject(AppUpdateService.shared)
+        let placement = MenuBarPopoverPlacement()
+        placement.availableHeight = 576 // 604-point visible screen, less bottom margin and shadow.
+        let size = try render(MenuBarPopoverRoot(placement: placement, content: content),
+                              name: "bench-large-compact-menu", width: PopupLayout.width + 48, checkScrolling: true)
+        XCTAssertLessThanOrEqual(size.height, 600)
+        let screen = NSRect(x: 0, y: 0, width: 1440, height: 604)
+        let anchor = NSRect(x: 800, y: 604, width: 30, height: 24)
+        let frame = MenuBarPopoverPlacement.frame(size: size, anchor: anchor, screen: screen)
+        XCTAssertGreaterThanOrEqual(frame.minY, screen.minY + 4)
+        XCTAssertLessThanOrEqual(frame.maxY, anchor.minY)
+    }
+
     func testSelectionIdentityCannotCollideWhenModelOrEffortContainsASeparator() throws {
         let first = CodexRadarSelection(model: "gpt-7|nova", effort: "high")
         let second = CodexRadarSelection(model: "gpt-7", effort: "nova|high")

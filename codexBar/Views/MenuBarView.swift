@@ -11,8 +11,14 @@ enum PopupSpacing {
     static let block: CGFloat = 16
 }
 
+private struct PopupChromeHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 struct MenuBarView: View {
     @Environment(\.popupArrowX) private var popupArrowX
+    @Environment(\.popupAvailableHeight) private var popupAvailableHeight
     var liveUpdates = true
     var onAppearanceChange: (String) -> Void = { _ in }
     var onOpenNotificationSettings: (@escaping (Bool) -> Void) -> Void = { completion in completion(false) }
@@ -31,7 +37,8 @@ struct MenuBarView: View {
     @EnvironmentObject var taskCenter: TaskCenterService
     @EnvironmentObject var codexHookInstaller: CodexHookInstallerService
     @EnvironmentObject var appUpdater: AppUpdateService
-    @ObservedObject private var radar = CodexRadarService.shared
+    @ObservedObject var radar = CodexRadarService.shared
+    @State private var chromeHeight: CGFloat = 108
     @State private var isRefreshing = false
     @State private var showError: String?
     @State private var showSuccess: String?
@@ -65,13 +72,21 @@ struct MenuBarView: View {
     }
 
     private var contentHeight: CGFloat {
-        max(taskSectionHeight, accountSectionHeight) + insightsHeight + 1
+        activityViewportHeight + insightsHeight + 1
+    }
+
+    private var contentBudget: CGFloat { max(0, popupAvailableHeight - chromeHeight - 1) }
+
+    private var activityViewportHeight: CGFloat {
+        min(max(taskSectionHeight, accountSectionHeight), contentBudget * 0.55)
     }
 
     private var insightsHeight: CGFloat {
         let rows = CodexRadarPresentation.matrix(from: radar.intelligence?.modelIQ).rows.count
-        // Include the radar header, footer, spacing and outer padding.
-        return max(252, CodexRadarTableView.height(rowCount: rows) + 96)
+        return CodexRadarQualityContent.panelHeight(
+            rowCount: rows, isPartial: radar.intelligence?.isPartial == true,
+            maximumHeight: contentBudget - activityViewportHeight
+        )
     }
 
     private var availableCount: Int { store.accounts.filter(\.isAvailable).count }
@@ -125,7 +140,7 @@ struct MenuBarView: View {
                     .popupEntrance()
                     .frame(maxHeight: .infinity)
                     Divider()
-                    CodexRadarView().popupEntrance(delay: 0.08)
+                    CodexRadarView(radar: radar, maximumHeight: insightsHeight).popupEntrance(delay: 0.08)
                         .frame(height: insightsHeight, alignment: .top)
                 }
                 .frame(width: PopupLayout.columnWidth)
@@ -342,6 +357,14 @@ struct MenuBarView: View {
         }
         .frame(width: PopupLayout.width)
         .padding(.top, popupArrowX == nil ? 0 : PopupGlassOutline.arrowHeight)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(key: PopupChromeHeightKey.self, value: max(0, geometry.size.height - contentHeight))
+            }
+        }
+        .onPreferenceChange(PopupChromeHeightKey.self) { height in
+            if height > 0, abs(height - chromeHeight) > 0.5 { chromeHeight = height }
+        }
         // One continuous backing avoids dark header/footer bands against the content.
         .background {
             PopupGlassOutline(arrowX: popupArrowX)

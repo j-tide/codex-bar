@@ -8,6 +8,7 @@ import OSLog
 final class MenuBarPopoverPlacement: ObservableObject {
     static let shadowInset: CGFloat = 24
     @Published var arrowX: CGFloat = PopupLayout.width / 2 + shadowInset
+    @Published var availableHeight: CGFloat = 900
 
     static func frame(size: NSSize, anchor: NSRect, screen: NSRect) -> NSRect {
         let x = min(max(anchor.midX - size.width / 2, screen.minX + 8), screen.maxX - size.width - 8)
@@ -20,6 +21,7 @@ struct MenuBarPopoverRoot<Content: View>: View {
     let content: Content
     var body: some View {
         content.environment(\.popupArrowX, placement.arrowX - MenuBarPopoverPlacement.shadowInset)
+            .environment(\.popupAvailableHeight, placement.availableHeight)
             .padding(.horizontal, MenuBarPopoverPlacement.shadowInset)
             .padding(.bottom, MenuBarPopoverPlacement.shadowInset)
     }
@@ -133,9 +135,11 @@ final class MenuBarGlassPanel: NSPanel {
     func resizeToFitContent() {
         guard let anchorView, let anchorWindow = anchorView.window, let contentView else { return }
         let anchor = anchorWindow.convertToScreen(anchorView.convert(anchorView.bounds, to: nil))
+        let screen = anchorWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? anchor
+        let availableHeight = max(0, min(anchor.minY, screen.maxY) - screen.minY - 4 - MenuBarPopoverPlacement.shadowInset)
+        if placement.availableHeight != availableHeight { placement.availableHeight = availableHeight }
         let size = contentView.fittingSize
         guard size.width > 0, size.height > 0 else { return }
-        let screen = anchorWindow.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? anchor
         let target = MenuBarPopoverPlacement.frame(size: size, anchor: anchor, screen: screen)
         if frame != target { setFrame(target, display: true) }
         let arrowX = anchor.midX - target.minX

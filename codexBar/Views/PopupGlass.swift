@@ -1,10 +1,15 @@
 import SwiftUI
 
 private struct PopupArrowKey: EnvironmentKey { static let defaultValue: CGFloat? = nil }
+private struct PopupAvailableHeightKey: EnvironmentKey { static let defaultValue: CGFloat = 900 }
 extension EnvironmentValues {
     var popupArrowX: CGFloat? {
         get { self[PopupArrowKey.self] }
         set { self[PopupArrowKey.self] = newValue }
+    }
+    var popupAvailableHeight: CGFloat {
+        get { self[PopupAvailableHeightKey.self] }
+        set { self[PopupAvailableHeightKey.self] = newValue }
     }
 }
 
