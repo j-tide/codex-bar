@@ -59,6 +59,31 @@ final class WeeklyQuotaTests: XCTestCase {
         XCTAssertEqual(result.weeklyUsedPercent, 37)
     }
 
+    func testEveryProTierKeepsWeeklyQuotaAndDiscardsFiveHourUsage() throws {
+        for planType in ["prolite", "pro_5x", "codex-pro-5x",
+                         "pro10x", "codex_pro_10x", "pro25x", "codex pro 25x"] {
+            let result = try WhamService.shared.parseUsage([
+                "plan_type": planType,
+                "rate_limit": [
+                    "primary_window": window(used: 91, seconds: 18_000, resetAt: 1_700_000_000),
+                    "secondary_window": window(used: 37, seconds: 604_800, resetAt: 1_800_000_000)
+                ]
+            ])
+
+            XCTAssertNil(result.fiveHourUsedPercent, planType)
+            XCTAssertEqual(result.weeklyUsedPercent, 37, planType)
+
+            let account = TokenAccount(
+                planType: planType,
+                fiveHourUsedPercent: 100,
+                weeklyUsedPercent: result.weeklyUsedPercent
+            )
+            XCTAssertFalse(account.hasFiveHourQuota, planType)
+            XCTAssertNil(account.fiveHourUsedPercent, planType)
+            XCTAssertFalse(account.quotaExhausted, planType)
+        }
+    }
+
     func testLegacyDualWindowResponseUsesSecondaryAsWeekly() throws {
         let result = try WhamService.shared.parseUsage([
             "rate_limit": [

@@ -1,5 +1,45 @@
 import SwiftUI
 
+struct AccountPlanBadge {
+    enum Tone: Hashable {
+        case secondary, proFive, proTen, proTwentyFive, legacyPro, teal, indigo, purple, gray
+
+        var color: Color {
+            switch self {
+            case .secondary: return .secondary
+            case .proFive: return .blue
+            case .proTen: return .indigo
+            case .proTwentyFive, .legacyPro: return CodexStatusPalette.warning
+            case .teal: return .teal
+            case .indigo: return .indigo
+            case .purple: return .purple
+            case .gray: return .gray
+            }
+        }
+    }
+
+    let title: String
+    let tone: Tone
+
+    init(planType: String) {
+        let normalized = planType
+            .lowercased()
+            .replacingOccurrences(of: "[_\\-\\s]", with: "", options: .regularExpression)
+
+        switch normalized {
+        case "free": (title, tone) = (planType.uppercased(), .secondary)
+        case "prolite", "pro5x", "codexpro5x": (title, tone) = ("PRO 5X", .proFive)
+        case "pro10x", "codexpro10x": (title, tone) = ("PRO 10X", .proTen)
+        case "pro25x", "codexpro25x": (title, tone) = ("PRO 25X", .proTwentyFive)
+        case "pro", "promax", "pro20x", "codexpro20x": (title, tone) = ("PRO", .legacyPro)
+        case "team", "business": (title, tone) = (planType.uppercased(), .teal)
+        case "enterprise": (title, tone) = (planType.uppercased(), .indigo)
+        case "plus": (title, tone) = (planType.uppercased(), .purple)
+        default: (title, tone) = (planType.uppercased(), .gray)
+        }
+    }
+}
+
 /// Small account pools show full quotas; larger pools keep backups compact.
 struct AccountRowView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,6 +63,7 @@ struct AccountRowView: View {
 
     var body: some View {
         let _ = language.identity
+        let planBadge = AccountPlanBadge(planType: account.planType)
         let fiveHourUsedPercent = account.hasFiveHourQuota
             ? account.fiveHourUsedPercent
             : nil
@@ -49,7 +90,7 @@ struct AccountRowView: View {
                     .lineLimit(1).truncationMode(.middle)
                     .help(displayName)
 
-                accountBadge(color: planBadgeColor) { Text(planBadgeText) }
+                accountBadge(color: planBadge.tone.color) { Text(planBadge.title) }
 
                 if hasResetCredits { resetCreditsBadge }
 
@@ -258,32 +299,6 @@ struct AccountRowView: View {
     private var statusColor: Color {
         if account.tokenExpired { return CodexStatusPalette.warning }
         return CodexStatusPalette.color(for: account.usageStatus)
-    }
-
-    private var planBadgeColor: Color {
-        switch normalizedPlanType {
-        case "free": return .secondary
-        case "prolite", "pro5x", "codexpro5x": return .blue
-        case "pro", "promax", "pro20x", "codexpro20x": return CodexStatusPalette.warning
-        case "team", "business": return .teal
-        case "enterprise": return .indigo
-        case "plus": return .purple
-        default: return .gray
-        }
-    }
-
-    private var planBadgeText: String {
-        switch normalizedPlanType {
-        case "prolite", "pro5x", "codexpro5x": return "PRO 5X"
-        case "pro", "promax", "pro20x", "codexpro20x": return "PRO 20X"
-        default: return account.planType.uppercased()
-        }
-    }
-
-    private var normalizedPlanType: String {
-        account.planType
-            .lowercased()
-            .replacingOccurrences(of: "[_\\-\\s]", with: "", options: .regularExpression)
     }
 
     private func accountBadge<Content: View>(color: Color, @ViewBuilder content: () -> Content) -> some View {
