@@ -109,7 +109,7 @@ struct CodexRadarQualityContent: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L.radarScoreExplanationTitle)
                         .font(.system(size: 12, weight: .semibold))
-                    Text(L.radarScoreMethod)
+                    Text(L.radarScoreMethod(maximumScore: Int(report?.binding.maximumScore ?? 150)))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -154,7 +154,7 @@ struct CodexRadarQualityContent: View {
                     .foregroundStyle(.secondary)
                     .help(error ?? "")
             } else {
-                Text("Codex Radar · RadarBench v1")
+                Text("Codex Radar · RadarBench")
                     .foregroundStyle(.secondary)
             }
             Text(L.radarPublicSummary).foregroundStyle(.secondary)
@@ -172,7 +172,7 @@ struct CodexRadarQualityContent: View {
                 Text(isRefreshing ? L.modelQualityReading : L.modelQualityNoData)
                     .font(.system(size: 11, weight: .medium))
             }
-            Text(error ?? L.radarScoreMethod)
+            Text(error ?? L.radarScoreMethod(maximumScore: Int(report?.binding.maximumScore ?? 150)))
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

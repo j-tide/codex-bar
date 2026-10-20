@@ -377,13 +377,13 @@ enum L {
     static var codexResetWindowSourceHelp: String { zh ? "打开官方证据" : "Open official source" }
     static var radarScoreTitle: String { zh ? "雷达分" : "Radar Score" }
     static var radarScoreExplanationTitle: String { zh ? "评分说明" : "About the score" }
-    static var radarScoreMethod: String {
-        zh ? "Codex Radar 的 RadarBench 社区评测，直接显示接口提供的 0–100 分成绩。各题最近三次有效样本等权，缺失题目不计零。模型为行，推理档位为列，随目录自动更新；暂无有效判分显示 —，真实零分保留。排名按原始分数，显示取整；悬停可查看原始分数与覆盖题数。公开接口不提供精确判分时间。"
-           : "Community RadarBench results from Codex Radar on the source's 0–100 scale. Each task's latest three valid samples have equal weight; missing tasks are not zero. Model rows and effort columns follow the catalog automatically. Ungraded selections show —; real zeroes remain. Ranks use raw scores; displayed values are rounded. Hover for precise scores and coverage. Exact grading times are not public."
+    static func radarScoreMethod(maximumScore: Int = 150) -> String {
+        zh ? "Codex Radar 的 RadarBench 社区评测，直接显示接口提供的 0–\(maximumScore) 分成绩。各题最近三次有效样本等权，缺失题目不计零。模型为行，推理档位为列，随目录自动更新；暂无有效判分显示 —，真实零分保留。排名按原始分数，显示取整；悬停可查看原始分数与覆盖题数。"
+           : "Community RadarBench results from Codex Radar on the source's 0–\(maximumScore) scale. Each task's latest three valid samples have equal weight; missing tasks are not zero. Model rows and effort columns follow the catalog automatically. Ungraded selections show —; real zeroes remain. Ranks use raw scores; displayed values are rounded. Hover for precise scores and coverage."
     }
     static var radarBenchScoreMethod: String {
-        zh ? "直接采用 RadarBench 原始成绩（0–100 分）；覆盖不足时为暂定成绩。"
-           : "Original RadarBench score (0–100); results with incomplete task coverage are provisional."
+        zh ? "直接采用 RadarBench 原始成绩；覆盖不足时为暂定成绩。"
+           : "Original RadarBench score; results with incomplete task coverage are provisional."
     }
     static var radarPartialDataNotice: String {
         zh ? "部分档位读取失败 · 可刷新重试" : "Some results could not load · refresh to retry"
