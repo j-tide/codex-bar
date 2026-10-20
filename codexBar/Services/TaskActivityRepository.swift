@@ -448,7 +448,11 @@ final class TaskActivityRepository {
 
     private func secureDirectory(at url: URL) throws {
         try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
-        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+        let permissions = (try? fileManager.attributesOfItem(atPath: url.path))?[.posixPermissions] as? NSNumber
+        // Even an unchanged chmod emits .attrib, which would trigger another reload.
+        if permissions?.intValue != 0o700 {
+            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+        }
     }
 }
 

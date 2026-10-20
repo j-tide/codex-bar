@@ -225,6 +225,38 @@ final class TaskCenterCoreTests: XCTestCase {
         fixture.repository.stop()
     }
 
+    func testRealDirectoryMonitorSettlesAfterLoadingAndReceivingARecord() async throws {
+        let fixture = try Fixture(now: fixedNow)
+        defer { fixture.remove() }
+        var results: [TaskActivityLoadResult] = []
+        fixture.repository.start { results.append($0) }
+
+        try await Task.sleep(for: .milliseconds(650))
+        XCTAssertLessThanOrEqual(results.count, 2, "Securing an unchanged directory must not keep triggering reloads")
+
+        try fixture.write(record(key: "real-event", state: .running, phase: .processing, age: 0))
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(results.last?.records.map(\.taskKey), ["real-event"])
+        let settledCount = results.count
+        try await Task.sleep(for: .milliseconds(650))
+        XCTAssertEqual(results.count, settledCount, "A file event must settle after its debounced reload")
+    }
+
+    func testRepositoryRepairsChangedDirectoryPermissionsAndPreservesPrivateRecords() throws {
+        let fixture = try Fixture(now: fixedNow)
+        defer { fixture.remove() }
+        let file = try fixture.write(record(key: "private", state: .ready, phase: .waitingInput, age: 0))
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        _ = fixture.repository.load()
+        try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: fixture.rootURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: fixture.sessionsURL.path)
+
+        XCTAssertEqual(fixture.repository.load().records.count, 1)
+        XCTAssertEqual(try fixture.permissions(of: fixture.rootURL), 0o700)
+        XCTAssertEqual(try fixture.permissions(of: fixture.sessionsURL), 0o700)
+        XCTAssertEqual(try fixture.permissions(of: file), 0o600)
+    }
+
     func testDirectoryInvalidationRecreatesDirectoryAndRearmsMonitor() async throws {
         let fixture = try Fixture(now: fixedNow, usesManualMonitor: true)
         defer { fixture.remove() }
