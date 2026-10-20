@@ -12,6 +12,8 @@ struct CodexRadarBenchBinding: Decodable {
     let interfaceConfirmed: Bool
     let productionReadVerified: Bool
     let benchmark: String
+    let scoreVersion: String?
+    let scoreMax: Double?
     let catalogVersion: String
     let taskSetSHA256: String
     let totalTasks: Int
@@ -22,6 +24,8 @@ struct CodexRadarBenchBinding: Decodable {
         case enabled, benchmark
         case interfaceConfirmed = "interface_confirmed"
         case productionReadVerified = "production_read_verified"
+        case scoreVersion = "score_version"
+        case scoreMax = "score_max"
         case catalogVersion = "catalog_version"
         case taskSetSHA256 = "task_set_sha256"
         case totalTasks = "total_tasks"
@@ -29,9 +33,16 @@ struct CodexRadarBenchBinding: Decodable {
         case selections = "model_efforts"
     }
 
+    // Older public catalogs predate explicit scale metadata.
+    var effectiveScoreVersion: String { scoreVersion ?? "radar-bench-v1" }
+    var maximumScore: Double { scoreMax ?? 100 }
+
     static func decode(_ data: Data) throws -> Self {
         let binding = try JSONDecoder().decode(Self.self, from: data)
         guard binding.enabled, binding.interfaceConfirmed, binding.productionReadVerified,
+              (binding.scoreVersion == nil && binding.scoreMax == nil)
+                || (binding.scoreVersion == "radar-bench-v1" && binding.scoreMax == 100)
+                || (binding.scoreVersion == "radar-bench-v2-150" && binding.scoreMax == 150),
               !binding.benchmark.isEmpty, !binding.catalogVersion.isEmpty,
               binding.taskSetSHA256.count == 64,
               binding.taskSetSHA256.allSatisfy({ $0.isHexDigit }),
@@ -52,6 +63,7 @@ struct CodexRadarBenchSummary: Decodable {
     let schema: String
     let benchmark: String
     let scoreVersion: String
+    let scoreMax: Double?
     let catalogVersion: String
     let taskSetSHA256: String
     let model: String
@@ -66,6 +78,7 @@ struct CodexRadarBenchSummary: Decodable {
     enum CodingKeys: String, CodingKey {
         case schema, benchmark, model, effort, score, coverage
         case scoreVersion = "score_version"
+        case scoreMax = "score_max"
         case catalogVersion = "catalog_version"
         case taskSetSHA256 = "task_set_sha256"
         case requiredTasks = "required_tasks"
@@ -78,9 +91,26 @@ struct CodexRadarBenchSummary: Decodable {
         let summary = try JSONDecoder().decode(Self.self, from: data)
         let expectedStatus = summary.coverage == 0 ? "missing_current_result"
             : summary.coverage == binding.totalTasks ? "complete" : "provisional"
-        guard summary.schema == "radar-bench-public-summary-v1",
-              summary.scoreVersion == "radar-bench-v1",
-              summary.scoringPolicyVersion == "radar-bench-v1-last3-per-task-equal-weight-100",
+        let validContract: Bool
+        switch summary.scoreVersion {
+        case "radar-bench-v1":
+            validContract = summary.schema == "radar-bench-public-summary-v1"
+                && (summary.scoreMax == nil || summary.scoreMax == 100)
+                && summary.scoringPolicyVersion == "radar-bench-v1-last3-per-task-equal-weight-100"
+        case "radar-bench-v2-150":
+            validContract = [
+                "radar-bench-public-summary-v3-150",
+                "radar-bench-public-summary-v4-150-daily",
+                "radar-bench-public-summary-v5-150-daily-graded-count",
+                "radar-bench-public-summary-v6-150-details"
+            ].contains(summary.schema)
+                && summary.scoreMax == 150
+                && summary.scoringPolicyVersion == "radar-bench-v2-last3-per-task-equal-weight-150"
+        default:
+            validContract = false
+        }
+        guard validContract,
+              summary.scoreVersion == binding.effectiveScoreVersion,
               summary.benchmark == binding.benchmark,
               summary.catalogVersion == binding.catalogVersion,
               summary.taskSetSHA256 == binding.taskSetSHA256,
@@ -95,7 +125,7 @@ struct CodexRadarBenchSummary: Decodable {
         if summary.coverage == 0 {
             guard summary.score == nil else { throw CodexRadarError.invalidResponse }
         } else {
-            guard let score = summary.score, score.isFinite, (0...100).contains(score) else {
+            guard let score = summary.score, score.isFinite, (0...binding.maximumScore).contains(score) else {
                 throw CodexRadarError.invalidResponse
             }
         }

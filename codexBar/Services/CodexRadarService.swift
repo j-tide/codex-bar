@@ -75,7 +75,8 @@ final class CodexRadarService: ObservableObject {
                     url.queryItems = [
                         URLQueryItem(name: "model", value: selection.model),
                         URLQueryItem(name: "effort", value: selection.effort),
-                        URLQueryItem(name: "view", value: "summary")
+                        URLQueryItem(name: "view", value: "summary"),
+                        URLQueryItem(name: "selection", value: "user-selected-v1")
                     ]
                     let requestURL = url.url!
                     group.addTask { (selection, await self.fetchQualityData(requestURL)) }
