@@ -561,6 +561,62 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     }
 }
 
+/// Draw native text without NSTextField's control appearance invalidation. On
+/// macOS 27, that invalidation during a status-item snapshot schedules another
+/// snapshot indefinitely, even for hidden fields. Keep the cell's native metrics.
+final class StatusBarLabelView: NSView {
+    private let textCell: NSTextFieldCell
+
+    var stringValue: String {
+        get { textCell.stringValue }
+        set {
+            guard textCell.stringValue != newValue else { return }
+            textCell.stringValue = newValue
+            setAccessibilityValue(newValue)
+            needsDisplay = true
+        }
+    }
+
+    var font: NSFont? {
+        get { textCell.font }
+        set { textCell.font = newValue; needsDisplay = true }
+    }
+
+    var textColor: NSColor? {
+        get { textCell.textColor }
+        set {
+            guard textCell.textColor != newValue else { return }
+            textCell.textColor = newValue
+            needsDisplay = true
+        }
+    }
+
+    init(labelWithString string: String) {
+        textCell = NSTextFieldCell(textCell: string)
+        super.init(frame: .zero)
+        textCell.isBezeled = false
+        textCell.drawsBackground = false
+        textCell.isEditable = false
+        textCell.isSelectable = false
+        textCell.wraps = false
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityValue(string)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var fittingSize: NSSize {
+        let size = textCell.cellSize
+        return NSSize(width: ceil(size.width), height: ceil(size.height))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        textCell.draw(withFrame: bounds, in: self)
+    }
+}
+
 final class StatusBarCapsuleView: NSView {
     private static let leftPadding: CGFloat = 0
     private static let rightPadding: CGFloat = 2
@@ -576,7 +632,7 @@ final class StatusBarCapsuleView: NSView {
     ]
 
     private let iconView = NSImageView()
-    private let textField = NSTextField(labelWithString: "")
+    private let textField = StatusBarLabelView(labelWithString: "")
     private let barsView = StatusQuotaBarsView()
     private let lightsView = StatusTaskCountsView()
     private var snapshot: TaskCenterSnapshot = .empty
@@ -721,11 +777,6 @@ final class StatusBarCapsuleView: NSView {
 
         textField.font = Self.textFont
         textField.textColor = NSColor.white.withAlphaComponent(0.93)
-        textField.backgroundColor = .clear
-        textField.isBezeled = false
-        textField.isEditable = false
-        textField.isSelectable = false
-        textField.drawsBackground = false
         textField.translatesAutoresizingMaskIntoConstraints = true
         addSubview(textField)
 
@@ -1153,7 +1204,7 @@ private final class StatusQuotaBarsView: NSView {
 /// Simultaneous task counts preserve every state, including when attention and running coexist.
 final class StatusTaskCountsView: NSView {
     private static let font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .medium)
-    private let labels = (0..<3).map { _ in NSTextField(labelWithString: "0") }
+    private let labels = (0..<3).map { _ in StatusBarLabelView(labelWithString: "0") }
     private let icons = (0..<3).map { _ in NSImageView() }
     private let separator = CALayer()
     private static let leadingInset: CGFloat = 8
@@ -1178,9 +1229,6 @@ final class StatusTaskCountsView: NSView {
         wantsLayer = true
         for view in labels {
             view.font = Self.font
-            view.drawsBackground = false
-            view.isBezeled = false
-            view.isSelectable = false
             addSubview(view)
         }
         for (index, icon) in icons.enumerated() {

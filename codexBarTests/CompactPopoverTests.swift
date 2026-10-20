@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XCTest
+import ObjectiveC
 @testable import codexAppBar
 
 @MainActor
@@ -49,18 +50,18 @@ final class CompactPopoverTests: XCTestCase {
         XCTAssertGreaterThan(StatusTaskCountsView.width(for: large), StatusTaskCountsView.width(for: small))
         let view = StatusTaskCountsView(frame: .zero)
         view.configure(snapshot: large, available: true)
-        let strings = view.subviews.compactMap { ($0 as? NSTextField)?.stringValue }
+        let strings = view.subviews.compactMap { ($0 as? StatusBarLabelView)?.stringValue }
         XCTAssertEqual(strings.filter { $0 == "1" }.count, 2)
         XCTAssertTrue(strings.contains("123"))
         view.frame = NSRect(x: 0, y: 0, width: StatusTaskCountsView.width(for: large), height: 24)
         view.layoutSubtreeIfNeeded()
-        for label in view.subviews.compactMap({ $0 as? NSTextField }) {
+        for label in view.subviews.compactMap({ $0 as? StatusBarLabelView }) {
             XCTAssertGreaterThanOrEqual(label.frame.width, label.fittingSize.width, "Count must include native text insets")
             XCTAssertGreaterThanOrEqual(label.frame.height, label.fittingSize.height)
             XCTAssertLessThanOrEqual(label.frame.maxX, view.bounds.maxX)
         }
         view.configure(snapshot: .empty, available: false)
-        XCTAssertEqual(view.subviews.compactMap { ($0 as? NSTextField)?.stringValue }.filter { $0 == "0" }.count, 3)
+        XCTAssertEqual(view.subviews.compactMap { ($0 as? StatusBarLabelView)?.stringValue }.filter { $0 == "0" }.count, 3)
     }
 
     func testMenuBarAttentionAppearsOnlyWhenNeededAndReclaimsWidth() {
@@ -72,7 +73,7 @@ final class CompactPopoverTests: XCTestCase {
         for (snapshot, visibleCount) in [(TaskCenterSnapshot.empty, 0), (attention, 1), (.empty, 0)] {
             view.configure(snapshot: snapshot, available: true)
             view.layoutSubtreeIfNeeded()
-            XCTAssertEqual(view.subviews.compactMap { $0 as? NSTextField }.filter { !$0.isHidden }.count, visibleCount)
+            XCTAssertEqual(view.subviews.compactMap { $0 as? StatusBarLabelView }.filter { !$0.isHidden }.count, visibleCount)
         }
         XCTAssertLessThan(StatusTaskCountsView.width(for: .empty), StatusTaskCountsView.width(for: attention))
     }
@@ -91,7 +92,7 @@ final class CompactPopoverTests: XCTestCase {
             let snapshot = TaskCenterSnapshot(records: records, now: now)
             view.configure(snapshot: snapshot, available: true)
             view.layoutSubtreeIfNeeded()
-            let labels = view.subviews.compactMap { $0 as? NSTextField }
+            let labels = view.subviews.compactMap { $0 as? StatusBarLabelView }
             XCTAssertEqual(labels.filter { !$0.isHidden }.count, records.count)
             for label in labels where label.isHidden { XCTAssertEqual(label.frame, .zero) }
             let divider = view.layer?.sublayers?.first { $0.frame.width == 0.5 }
@@ -140,7 +141,7 @@ final class CompactPopoverTests: XCTestCase {
                 XCTAssertEqual(item.length, button.bounds.width, accuracy: 0.01)
                 XCTAssertEqual(view.frame, button.bounds)
                 let counts = try XCTUnwrap(view.subviews.first { $0 is StatusTaskCountsView })
-                let labels = counts.subviews.compactMap { $0 as? NSTextField }
+                let labels = counts.subviews.compactMap { $0 as? StatusBarLabelView }
                 for label in labels where label.isHidden { XCTAssertEqual(label.frame, .zero) }
                 if mask != 0 {
                     let countEdge = try XCTUnwrap(labels.filter { !$0.isHidden }.map(\.frame.maxX).max())
@@ -160,6 +161,49 @@ final class CompactPopoverTests: XCTestCase {
             light: .offline, snapshot: .empty, showStatusLights: false)
         XCTAssertEqual(item.length, compactWidth, "Repair a stale native width even when the model is unchanged")
         XCTAssertEqual(view.bounds.width, compactWidth)
+    }
+
+    func testUnchangedStatusItemSettlesAfterNativeSnapshots() async throws {
+        // Count AppKit's actual snapshots, including hidden text and a running ring.
+        // This hook is confined to the test process and restored before returning.
+        let selector = NSSelectorFromString("_redrawReplicantSnapshot:sourceView:")
+        guard let method = class_getInstanceMethod(NSStatusItem.self, selector) else {
+            throw XCTSkip("AppKit snapshot instrumentation is unavailable")
+        }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let original = method_getImplementation(method)
+        typealias Render = @convention(c) (AnyObject, Selector, AnyObject?, AnyObject?) -> Void
+        let render = unsafeBitCast(original, to: Render.self)
+        var snapshots = 0
+        let block: @convention(block) (AnyObject, AnyObject?, AnyObject?) -> Void = { owner, replica, source in
+            if owner === item { snapshots += 1 }
+            render(owner, selector, replica, source)
+        }
+        let replacement = imp_implementationWithBlock(block)
+        method_setImplementation(method, replacement)
+        defer {
+            method_setImplementation(method, original)
+            imp_removeBlock(replacement)
+            NSStatusBar.system.removeStatusItem(item)
+        }
+        let button = try XCTUnwrap(item.button)
+        button.wantsLayer = true
+        let view = StatusBarCapsuleView(frame: button.bounds)
+        view.autoresizingMask = [.width, .height]
+        button.addSubview(view)
+        let record = TaskActivityRecord(taskKey: "run", eventKey: "run", state: .running,
+            phase: .processing, projectName: "test", updatedAt: Date(), source: "UserPromptSubmit")
+        let quota = StatusBarQuotaState(text: "7d 53%", fiveHourDisplayPercent: nil,
+            fiveHourUsedPercent: nil, weeklyDisplayPercent: 53, weeklyUsedPercent: 47)
+        for snapshot in [TaskCenterSnapshot.empty, TaskCenterSnapshot(records: [record])] {
+            view.update(in: item, iconName: "codexappbar", quotaState: quota,
+                light: .running, snapshot: snapshot, showStatusLights: true)
+            try await Task.sleep(for: .milliseconds(600))
+            XCTAssertGreaterThan(snapshots, 0, "The regression must exercise AppKit's native snapshot path")
+            let settled = snapshots
+            try await Task.sleep(for: .milliseconds(350))
+            XCTAssertEqual(snapshots, settled, "Unchanged status text must not perpetually invalidate AppKit snapshots")
+        }
     }
 
     func testMenuBarSpinnerUsesCompositorWithoutMovingCounts() async throws {
