@@ -55,6 +55,7 @@ struct AccountRowView: View {
     let isRefreshing: Bool
     var showsDetails = false
     var compactPool = false
+    var usesSubscriptionRoute = true
     private var expanded: Bool { isActive || showsDetails }
     let onActivate: () -> Void
     let onRefresh: () -> Void
@@ -97,7 +98,7 @@ struct AccountRowView: View {
                 if isActive {
                     accountBadge(color: PopupLayout.accent) {
                         Image(systemName: "checkmark.circle.fill")
-                        Text(L.zh ? "当前账号" : "Current")
+                        Text(usesSubscriptionRoute ? (L.zh ? "当前账号" : "Current") : (L.zh ? "已登录" : "Signed in"))
                     }
                 }
 

@@ -486,7 +486,8 @@ struct MenuBarView: View {
 
     private func accountRow(_ account: TokenAccount) -> some View {
         AccountRowView(account: account, isActive: account.isActive, now: now,
-                       isRefreshing: refreshingAccounts.contains(account.id), showsDetails: store.accounts.count <= 2, compactPool: store.accounts.count >= 3) {
+                       isRefreshing: refreshingAccounts.contains(account.id), showsDetails: store.accounts.count <= 2, compactPool: store.accounts.count >= 3,
+                       usesSubscriptionRoute: connectionStatus.mode == .subscription) {
             activateAccount(account)
         } onRefresh: { Task { await refreshAccount(account) } }
           onReauth: { reauthAccount(account) }
