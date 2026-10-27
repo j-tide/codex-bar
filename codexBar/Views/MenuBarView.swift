@@ -38,6 +38,7 @@ struct MenuBarView: View {
     @EnvironmentObject var codexHookInstaller: CodexHookInstallerService
     @EnvironmentObject var appUpdater: AppUpdateService
     @ObservedObject var radar = CodexRadarService.shared
+    @State private var connectionStatus = CodexConnectionStatus()
     @State private var chromeHeight: CGFloat = 108
     @State private var isRefreshing = false
     @State private var showError: String?
@@ -374,6 +375,18 @@ struct MenuBarView: View {
         .accentColor(PopupLayout.accent)
         .environment(\.popupLiveUpdates, liveUpdates)
         .preferredColorScheme(preferredScheme)
+        .task(id: liveUpdates) {
+            guard liveUpdates else { return }
+            // Read off the main actor; SwiftUI cancels polling when the popup closes.
+            while !Task.isCancelled {
+                let status = await Task.detached(priority: .utility) {
+                    CodexConnectionReader.readDefault()
+                }.value
+                guard !Task.isCancelled else { return }
+                if connectionStatus != status { connectionStatus = status }
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            }
+        }
         .onChange(of: popupAppearance) { _, appearance in onAppearanceChange(appearance) }
         .focusEffectDisabled()
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -418,6 +431,7 @@ struct MenuBarView: View {
             }
             Text(appUpdater.currentVersionDisplay).font(.system(size: 11)).foregroundStyle(.secondary)
             Spacer()
+            CodexConnectionBadge(status: connectionStatus)
             CodexResetWindowTipView()
             if isRefreshing {
                 Text(L.refreshing).font(.system(size: 11)).foregroundStyle(.secondary)
