@@ -76,12 +76,14 @@ extension View {
 }
 
 enum MetricFormat {
-    case tokens, integer, percent
+    case tokens, integer, percent, score
     func text(_ value: Double) -> String {
         switch self {
         case .tokens: return TokenFormat.compact(Int(value.rounded()))
         case .integer: return String(Int(value.rounded()))
         case .percent: return "\(Int(value.rounded()))%"
+        // Source scores can land within floating-point error of a half-cent.
+        case .score: return String(format: "%.2f", ((value * 100 + 0.000000001).rounded()) / 100)
         }
     }
 }

@@ -1,0 +1,283 @@
+{
+  "schema": "codex-model-tradeoffs/2",
+  "round_id": "codex-four-261-10c-20261029",
+  "protocol": "codex-four-weighted-150-v2",
+  "rows": [
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "low",
+      "score150": 106.16576086956522,
+      "score150_display": "106.17"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "score150": 102.89423076923077,
+      "score150_display": "102.89"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "score150": 123.80192307692307,
+      "score150_display": "123.80"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "xhigh",
+      "score150": 125.3875,
+      "score150_display": "125.39"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "max",
+      "score150": 135.7833333333333,
+      "score150_display": "135.78"
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "effort": "ultra",
+      "score150": 125.05000000000001,
+      "score150_display": "125.05"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "score150": 118.76249999999999,
+      "score150_display": "118.76"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "score150": 107.1,
+      "score150_display": "107.10"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "score150": 124.45714285714286,
+      "score150_display": "124.46"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "score150": 127.73571428571428,
+      "score150_display": "127.74"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "max",
+      "score150": 146.57327586206895,
+      "score150_display": "146.57"
+    },
+    {
+      "model": "gpt-6-astra",
+      "effort": "ultra",
+      "score150": 131.72500000000002,
+      "score150_display": "131.73"
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "effort": "low",
+      "score150": 91.25113636363636,
+      "score150_display": "91.25"
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "effort": "medium",
+      "score150": 89.48035714285714,
+      "score150_display": "89.48"
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "effort": "high",
+      "score150": 94.47236842105262,
+      "score150_display": "94.47"
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "effort": "xhigh",
+      "score150": 108.17386363636363,
+      "score150_display": "108.17"
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "effort": "max",
+      "score150": 136.95,
+      "score150_display": "136.95"
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "effort": "ultra",
+      "score150": 114.66684782608695,
+      "score150_display": "114.67"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "low",
+      "score150": 88.1625,
+      "score150_display": "88.16"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "medium",
+      "score150": 93.29021739130435,
+      "score150_display": "93.29"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "high",
+      "score150": 111.11250000000001,
+      "score150_display": "111.11"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "xhigh",
+      "score150": 104.79107142857143,
+      "score150_display": "104.79"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "max",
+      "score150": 130.5,
+      "score150_display": "130.50"
+    },
+    {
+      "model": "gpt-6-sol",
+      "effort": "ultra",
+      "score150": 107.2125,
+      "score150_display": "107.21"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "score150": 44.68858695652174,
+      "score150_display": "44.69"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "medium",
+      "score150": 62.4375,
+      "score150_display": "62.44"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "high",
+      "score150": 57.013636363636365,
+      "score150_display": "57.01"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "xhigh",
+      "score150": 96.56576086956521,
+      "score150_display": "96.57"
+    },
+    {
+      "model": "gpt-6-luna",
+      "effort": "max",
+      "score150": 96.61467391304348,
+      "score150_display": "96.61"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "score150": 82.82142857142858,
+      "score150_display": "82.82"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "score150": 90.40271739130435,
+      "score150_display": "90.40"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "score150": 97.54326923076923,
+      "score150_display": "97.54"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "score150": 104.84184782608696,
+      "score150_display": "104.84"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "max",
+      "score150": 106.7625,
+      "score150_display": "106.76"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "ultra",
+      "score150": 126.5625,
+      "score150_display": "126.56"
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "low",
+      "score150": 74.525,
+      "score150_display": "74.53"
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "medium",
+      "score150": 78.98863636363636,
+      "score150_display": "78.99"
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "score150": 73.18392857142857,
+      "score150_display": "73.18"
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "xhigh",
+      "score150": 84.81521739130434,
+      "score150_display": "84.82"
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "max",
+      "score150": 115.5375,
+      "score150_display": "115.54"
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "effort": "ultra",
+      "score150": 117.22500000000001,
+      "score150_display": "117.23"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "score150": 77.8125,
+      "score150_display": "77.81"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "medium",
+      "score150": 79.575,
+      "score150_display": "79.58"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "score150": 85.72826086956522,
+      "score150_display": "85.73"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "xhigh",
+      "score150": 73.80163043478261,
+      "score150_display": "73.80"
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "effort": "max",
+      "score150": 105.85416666666666,
+      "score150_display": "105.85"
+    }
+  ]
+}

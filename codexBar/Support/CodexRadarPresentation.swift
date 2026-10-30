@@ -242,9 +242,9 @@ enum CodexRadarPresentation {
             lines.append(L.zh ? "覆盖 \(coverage) 题" : "Coverage: \(coverage) tasks")
         }
         lines.append(L.zh
-                     ? "排名使用未取整分数；表格显示整数，因此相同整数可能有不同名次。"
-                     : "Ranks use unrounded scores. Equal displayed integers can have different ranks.")
-        lines.append(L.radarBenchScoreMethod)
+                     ? "排名使用未取整分数；表格保留两位小数。"
+                     : "Ranks use unrounded scores; the table shows two decimal places.")
+        lines.append(L.radarOriginalScoreMethod)
         return lines.joined(separator: "\n")
     }
 

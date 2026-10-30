@@ -24,9 +24,12 @@ struct CodexRadarView: View {
 }
 
 struct CodexRadarQualityContent: View {
-    static func panelHeight(rowCount: Int, isPartial: Bool, maximumHeight: CGFloat = 360) -> CGFloat {
+    // The 9-point test-window line occupies 11 points, plus the stack's 10-point spacing.
+    private static let testWindowHeight: CGFloat = 21
+
+    static func panelHeight(rowCount: Int, isPartial: Bool, maximumHeight: CGFloat = 360, hasTestWindow: Bool = false) -> CGFloat {
         let partialNoticeHeight: CGFloat = isPartial ? 24 : 0
-        return min(max(0, maximumHeight), max(252, CodexRadarTableView.height(rowCount: rowCount) + 96 + partialNoticeHeight))
+        return min(max(0, maximumHeight), max(252, CodexRadarTableView.height(rowCount: rowCount) + 96 + partialNoticeHeight + (hasTestWindow ? testWindowHeight : 0)))
     }
 
     @AppStorage("languageOverride") private var chinese = L.systemIsChinese
@@ -44,13 +47,22 @@ struct CodexRadarQualityContent: View {
 
     private var tableViewportHeight: CGFloat {
         min(CodexRadarTableView.height(rowCount: matrix.rows.count),
-            max(0, maximumHeight - 96 - (report?.isPartial == true ? 24 : 0)))
+            max(0, maximumHeight - 96 - (report?.isPartial == true ? 24 : 0) - (report?.testWindow == nil ? 0 : Self.testWindowHeight)))
     }
 
     var body: some View {
         let _ = chinese
         VStack(alignment: .leading, spacing: 10) {
             header
+
+            if let testWindow = report?.testWindow {
+                Text("\(L.radarTestWindow): \(testWindow)")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .help(testWindow)
+            }
 
             if report?.isPartial == true {
                 Text(L.radarPartialDataNotice)
@@ -71,7 +83,7 @@ struct CodexRadarQualityContent: View {
                     }
                 }
                 .zIndex(1)
-                Text(L.radarGradedSelections(scored: matrix.cells.count, total: report?.binding.selections.count ?? 0))
+                Text(L.radarGradedSelections(scored: matrix.cells.count, total: report?.selectionCount ?? 0))
                     .font(.system(size: 9)).foregroundStyle(.secondary)
                     .help(L.radarMatrixNotice)
                 footer
@@ -90,7 +102,7 @@ struct CodexRadarQualityContent: View {
                 .accessibilityHidden(true)
             Text(L.radarScoreTitle)
                 .font(.system(size: 13, weight: .medium))
-            Text("RadarBench").font(.system(size: 9)).foregroundStyle(.secondary)
+            Text(report?.sourceName ?? L.radarFourTasks).font(.system(size: 9)).foregroundStyle(.secondary)
             Button {
                 showsScoreExplanation.toggle()
             } label: {
@@ -109,7 +121,7 @@ struct CodexRadarQualityContent: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L.radarScoreExplanationTitle)
                         .font(.system(size: 12, weight: .semibold))
-                    Text(L.radarScoreMethod(maximumScore: Int(report?.binding.maximumScore ?? 150)))
+                    Text(L.radarScoreMethod(maximumScore: Int(report?.maximumScore ?? 150)))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -154,7 +166,7 @@ struct CodexRadarQualityContent: View {
                     .foregroundStyle(.secondary)
                     .help(error ?? "")
             } else {
-                Text("Codex Radar · RadarBench")
+                Text("Codex Radar")
                     .foregroundStyle(.secondary)
             }
             Text(L.radarPublicSummary).foregroundStyle(.secondary)
@@ -172,7 +184,7 @@ struct CodexRadarQualityContent: View {
                 Text(isRefreshing ? L.modelQualityReading : L.modelQualityNoData)
                     .font(.system(size: 11, weight: .medium))
             }
-            Text(error ?? L.radarScoreMethod(maximumScore: Int(report?.binding.maximumScore ?? 150)))
+            Text(error ?? L.radarScoreMethod(maximumScore: Int(report?.maximumScore ?? 150)))
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -243,7 +255,7 @@ struct CodexRadarTableView: View {
                     }
                     .foregroundStyle(rankColor(rank)).frame(height: 9)
                     .padding(.trailing, 3).accessibilityHidden(true)
-                    AnimatedMetric(value: cell.score)
+                    AnimatedMetric(value: cell.score, format: .score)
                         .font(.system(size: 11, weight: podium ? .semibold : .medium, design: .rounded))
                         .foregroundStyle(podium ? rankColor(rank) : Color.primary)
                         .lineLimit(1).minimumScaleFactor(0.72)

@@ -377,20 +377,22 @@ enum L {
     static var codexResetWindowSourceHelp: String { zh ? "打开官方证据" : "Open official source" }
     static var radarScoreTitle: String { zh ? "雷达分" : "Radar Score" }
     static var radarScoreExplanationTitle: String { zh ? "评分说明" : "About the score" }
+    static var radarFourTasks: String { zh ? "四项评测" : "4 tasks" }
+    static var radarTestWindow: String { zh ? "本轮测试" : "Test window" }
     static func radarScoreMethod(maximumScore: Int = 150) -> String {
-        zh ? "Codex Radar 的 RadarBench 社区评测，直接显示接口提供的 0–\(maximumScore) 分成绩。各题最近三次有效样本等权，缺失题目不计零。模型为行，推理档位为列，随目录自动更新；暂无有效判分显示 —，真实零分保留。排名按原始分数，显示取整；悬停可查看原始分数与覆盖题数。"
-           : "Community RadarBench results from Codex Radar on the source's 0–\(maximumScore) scale. Each task's latest three valid samples have equal weight; missing tasks are not zero. Model rows and effort columns follow the catalog automatically. Ungraded selections show —; real zeroes remain. Ranks use raw scores; displayed values are rounded. Hover for precise scores and coverage."
+        zh ? "与 Codex Radar 首页降智雷达使用同一轮四项评测，总分 \(maximumScore)。按数据源公布的权重汇总最终分项成绩：当前秦始皇 40%、庞贝 30%、鹈鹕和糖果各 15%。缺少任一分项时显示 —，真实零分保留。模型和推理档位随数据源更新，每 15 分钟刷新；本轮测试时间为成绩所属批次。排名使用未取整分数，表格保留两位小数。"
+           : "The same four-task evaluation round as Codex Radar's homepage, on a \(maximumScore)-point scale. Final task grades use the published weights: currently Qin Shi Huang 40%, Pompeii 30%, Pelican and Candy 15% each. Missing components show —; real zeroes remain. Models and efforts follow the source, refreshed every 15 minutes. The test window identifies the evaluation round. Ranks use unrounded scores; the table shows two decimals."
     }
-    static var radarBenchScoreMethod: String {
-        zh ? "直接采用 RadarBench 原始成绩；覆盖不足时为暂定成绩。"
-           : "Original RadarBench score; results with incomplete task coverage are provisional."
+    static var radarOriginalScoreMethod: String {
+        zh ? "采用数据源最终分项成绩及公布权重；缺项不补零。"
+           : "Uses final task grades and the source's published weights; missing grades are not zero."
     }
     static var radarPartialDataNotice: String {
-        zh ? "部分档位读取失败 · 可刷新重试" : "Some results could not load · refresh to retry"
+        zh ? "部分档位成绩不完整 · 可刷新重试" : "Some results are incomplete · refresh to retry"
     }
     static var radarMatrixNotice: String {
-        zh ? "— 表示暂无有效判分；0 为有效分数。显示取整，悬停查看精确分数、覆盖题数和排名。"
-           : "— means no valid grade; 0 is a valid score. Values are rounded. Hover for precise scores, coverage and rank."
+        zh ? "— 表示暂无完整成绩或不支持该档位；0 为有效分数。保留两位小数，悬停查看精确分数、覆盖题数和排名。"
+           : "— means incomplete grades or an unsupported effort; 0 is valid. Values show two decimals. Hover for precise scores, coverage and rank."
     }
     static func radarGradedSelections(scored: Int, total: Int) -> String {
         zh ? "\(scored)/\(total) 个档位有成绩 · — 暂无评分" : "\(scored)/\(total) graded · — awaiting grades"

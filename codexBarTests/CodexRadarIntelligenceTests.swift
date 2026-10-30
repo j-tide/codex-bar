@@ -5,22 +5,17 @@ import XCTest
 
 @MainActor
 final class CodexRadarIntelligenceTests: XCTestCase {
-    func testServiceDiscoversModelsAndEffortsFromChangingCatalogWithoutAppUpdate() async throws {
-        let firstBinding = try benchBindingData(selections: [
+    func testServiceDiscoversModelsAndEffortsFromChangingCurrentRoundWithoutAppUpdate() async throws {
+        let firstResults = try fourTaskData(selections: [
             ("gpt-6.1-sol", "high"), ("gpt-7-nova", "adaptive")
-        ])
+        ], score: 73.5)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RadarURLProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel(); RadarURLProtocol.respond = nil }
         let service = CodexRadarService(session: session)
         RadarURLProtocol.respond = { request in
-            if request.url!.path == "/data/radar-bench-binding.json" { return (200, "", firstBinding) }
-            guard request.url!.path == "/api/radar-bench-score" else { return (503, "", Data()) }
-            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            let model = query.first { $0.name == "model" }!.value!
-            let effort = query.first { $0.name == "effort" }!.value!
-            return (200, "", try self.benchSummaryData(binding: firstBinding, model: model, effort: effort, score: 73.5))
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, "", firstResults) : (503, "", Data())
         }
 
         await service.refresh()
@@ -28,24 +23,19 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         let firstMatrix = CodexRadarPresentation.matrix(from: service.intelligence?.modelIQ)
         XCTAssertNil(service.lastError)
         XCTAssertEqual(firstMatrix.rows.map(\.displayName), ["GPT-7-nova", "GPT-6.1 Sol"])
-        XCTAssertEqual(firstMatrix.rows.first?.cell(for: "adaptive")?.score, 73.5)
+        XCTAssertEqual(try XCTUnwrap(firstMatrix.rows.first?.cell(for: "adaptive")?.score), 73.5, accuracy: 0.0000000001)
         XCTAssertTrue(firstMatrix.columns.contains { $0.id == "adaptive" })
 
-        let secondBinding = try benchBindingData(selections: [("gpt-6.1-sol", "high"), ("gpt-7.1-orion", "deep")], catalogVersion: "next-catalog")
+        let secondResults = try fourTaskData(selections: [("gpt-6.1-sol", "high"), ("gpt-7.1-orion", "deep")], score: 81.25)
         RadarURLProtocol.respond = { request in
-            if request.url!.path == "/data/radar-bench-binding.json" { return (200, "", secondBinding) }
-            guard request.url!.path == "/api/radar-bench-score" else { return (503, "", Data()) }
-            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            let model = query.first { $0.name == "model" }!.value!
-            let effort = query.first { $0.name == "effort" }!.value!
-            return (200, "", try self.benchSummaryData(binding: secondBinding, model: model, effort: effort, score: 81.25))
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, "", secondResults) : (503, "", Data())
         }
 
         await service.refresh()
 
         let secondMatrix = CodexRadarPresentation.matrix(from: service.intelligence?.modelIQ)
         XCTAssertEqual(secondMatrix.rows.map(\.displayName), ["GPT-7.1-orion", "GPT-6.1 Sol"])
-        XCTAssertEqual(secondMatrix.rows.first?.cell(for: "deep")?.score, 81.25)
+        XCTAssertEqual(try XCTUnwrap(secondMatrix.rows.first?.cell(for: "deep")?.score), 81.25, accuracy: 0.0000000001)
         XCTAssertFalse(secondMatrix.columns.contains { $0.id == "adaptive" })
     }
 
@@ -122,16 +112,11 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         }
     }
 
-    func testServiceKeepsCatalogRowsDuringPartialOutageAndCachedScoresOnTotalFailure() async throws {
-        let binding = try benchBindingData(selections: [("gpt-6.1-sol", "low"), ("gpt-7-nova", "adaptive")])
-        let valid = try benchSummaryData(binding: binding, model: "gpt-6.1-sol", effort: "low", score: 75, coverage: 12)
+    func testServiceKeepsCurrentCatalogRowsDuringPartialGradesAndCachedScoresOnTotalFailure() async throws {
+        let selections = [("gpt-6.1-sol", "low"), ("gpt-7-nova", "adaptive")]
+        let results = try fourTaskData(selections: selections, score: 75, gradedRows: 1)
         RadarURLProtocol.respond = { request in
-            switch request.url!.path {
-            case "/data/radar-bench-binding.json": return (200, "", binding)
-            case "/api/radar-bench-score":
-                return request.url!.query!.contains("gpt-6.1-sol") ? (200, "HIT", valid) : (503, "", Data())
-            default: return (503, "", Data())
-            }
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, "", results) : (503, "", Data())
         }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RadarURLProtocol.self]
@@ -146,44 +131,32 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         let matrix = CodexRadarPresentation.matrix(from: partial.modelIQ)
         XCTAssertEqual(matrix.rows.map(\.displayName), ["GPT-7-nova", "GPT-6.1 Sol"])
         XCTAssertTrue(matrix.rows[0].cellsByEffort.isEmpty)
-        XCTAssertEqual(matrix.rows[1].cell(for: "low")?.score, 75)
+        XCTAssertEqual(try XCTUnwrap(matrix.rows[1].cell(for: "low")?.score), 75, accuracy: 0.0000000001)
         let fetchedAt = service.lastFetchAt
-        let size = try render(CodexRadarQualityContent(report: partial, isRefreshing: false, error: nil), name: "bench-partial")
-        XCTAssertLessThanOrEqual(size.height, CodexRadarQualityContent.panelHeight(rowCount: matrix.rows.count, isPartial: true))
+        let size = try render(CodexRadarQualityContent(report: partial, isRefreshing: false, error: nil), name: "current-round-partial")
+        XCTAssertLessThanOrEqual(size.height, CodexRadarQualityContent.panelHeight(rowCount: matrix.rows.count, isPartial: true, hasTestWindow: true))
 
-        RadarURLProtocol.respond = { request in
-            (request.url!.path == "/data/radar-bench-binding.json" ? 200 : 503, "", binding)
-        }
+        RadarURLProtocol.respond = { _ in (503, "", Data()) }
         await service.refresh()
         XCTAssertNotNil(service.lastError)
         XCTAssertEqual(service.lastFetchAt, fetchedAt)
-        XCTAssertEqual(service.intelligence?.modelIQ.comparisons[CodexRadarSelection(model: "gpt-6.1-sol", effort: "low").key]?.latest?.score, 75)
+        XCTAssertEqual(try XCTUnwrap(service.intelligence?.modelIQ.comparisons[CodexRadarSelection(model: "gpt-6.1-sol", effort: "low").key]?.latest?.score), 75, accuracy: 0.0000000001)
         XCTAssertFalse(service.isRefreshing)
 
+        let recovered = try fourTaskData(selections: selections, score: 80)
         RadarURLProtocol.respond = { request in
-            if request.url!.path == "/data/radar-bench-binding.json" { return (200, "", binding) }
-            if request.url!.path != "/api/radar-bench-score" { return (503, "", Data()) }
-            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            let model = query.first { $0.name == "model" }!.value!
-            let effort = query.first { $0.name == "effort" }!.value!
-            return (200, "HIT", try self.benchSummaryData(binding: binding, model: model, effort: effort, score: 80))
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, "", recovered) : (503, "", Data())
         }
         await service.refresh()
         XCTAssertNil(service.lastError)
         XCTAssertFalse(service.intelligence?.isPartial ?? true)
-        XCTAssertEqual(service.intelligence?.modelIQ.comparisons[CodexRadarSelection(model: "gpt-7-nova", effort: "adaptive").key]?.latest?.score, 80)
+        XCTAssertEqual(try XCTUnwrap(service.intelligence?.modelIQ.comparisons[CodexRadarSelection(model: "gpt-7-nova", effort: "adaptive").key]?.latest?.score), 80, accuracy: 0.0000000001)
     }
 
-    func testServiceShowsCatalogEvenBeforeAnyModelHasGrades() async throws {
-        let binding = try benchBindingData(selections: [("gpt-6.1-sol", "high"), ("gpt-7-nova", "adaptive")])
+    func testServiceShowsCurrentCatalogEvenBeforeAnyModelHasGrades() async throws {
+        let results = try fourTaskData(selections: [("gpt-6.1-sol", "high"), ("gpt-7-nova", "adaptive")], score: nil)
         RadarURLProtocol.respond = { request in
-            if request.url!.path == "/data/radar-bench-binding.json" { return (200, "", binding) }
-            if request.url!.path != "/api/radar-bench-score" { return (503, "", Data()) }
-            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            return (200, "HIT", try self.benchSummaryData(
-                binding: binding, model: query.first { $0.name == "model" }!.value!,
-                effort: query.first { $0.name == "effort" }!.value!, score: nil, coverage: 0
-            ))
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, "", results) : (503, "", Data())
         }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RadarURLProtocol.self]
@@ -197,8 +170,24 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         XCTAssertEqual(matrix.rows.count, 2)
         XCTAssertTrue(matrix.cells.isEmpty)
         XCTAssertNil(matrix.bestCellID)
-        XCTAssertFalse(report.isPartial)
+        XCTAssertTrue(report.isPartial)
     }
+
+    func testCurrentEightModelRoundRendersLightAndDarkWithItsTestWindow() throws {
+        let report = try CodexRadarFourTaskResults.decode(fixtureData("four-task-results")).report
+        XCTAssertEqual(report.selectionCount, 46)
+        XCTAssertNotNil(report.testWindow)
+        for scheme in [ColorScheme.light, .dark] {
+            let name = scheme == .light ? "four-task-light" : "four-task-dark"
+            let content = CodexRadarQualityContent(report: report, isRefreshing: false, error: nil)
+                .background(scheme == .light ? Color.white : Color(nsColor: .windowBackgroundColor))
+                .environment(\.colorScheme, scheme)
+            let size = try render(content, name: name)
+            XCTAssertEqual(size.width, PopupLayout.columnWidth, accuracy: 0.5)
+            XCTAssertLessThanOrEqual(size.height, CodexRadarQualityContent.panelHeight(rowCount: 8, isPartial: false, hasTestWindow: true))
+        }
+    }
+
 
     func testCapturedPublicCatalogShowsGPT61AndRendersAtMenuWidth() throws {
         let report = try fixtureReport()
@@ -231,7 +220,7 @@ final class CodexRadarIntelligenceTests: XCTestCase {
 
     func testMatrixPanelKeepsAllCatalogModelsAndTheThreeScoredSelections() throws {
         let report = try fixtureReport()
-        XCTAssertEqual(report.binding.selections.count, 34)
+        XCTAssertEqual(report.selectionCount, 34)
         let matrix = CodexRadarPresentation.matrix(from: report.modelIQ)
         XCTAssertEqual(matrix.rows.count, 6)
         XCTAssertEqual(matrix.columns.map(\.id), ["low", "medium", "high", "xhigh", "max", "ultra"])
@@ -286,15 +275,9 @@ final class CodexRadarIntelligenceTests: XCTestCase {
     }
 
     func testLargeCatalogKeepsTheFullMenuInsideACompactScreen() async throws {
-        let binding = try benchBindingData(selections: (0..<40).map { ("gpt-7.\($0)-sol", "high") })
+        let results = try fourTaskData(selections: (0..<40).map { ("gpt-7.\($0)-sol", "high") }, score: 73.5)
         RadarURLProtocol.respond = { request in
-            if request.url!.path == "/data/radar-bench-binding.json" { return (200, "", binding) }
-            if request.url!.path != "/api/radar-bench-score" { return (503, "", Data()) }
-            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
-            return (200, "HIT", try self.benchSummaryData(
-                binding: binding, model: query.first { $0.name == "model" }!.value!,
-                effort: query.first { $0.name == "effort" }!.value!, score: 73.5
-            ))
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, "", results) : (503, "", Data())
         }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RadarURLProtocol.self]
@@ -356,6 +339,33 @@ final class CodexRadarIntelligenceTests: XCTestCase {
     private func fixtureData(_ name: String) throws -> Data {
         let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         return try Data(contentsOf: directory.appendingPathComponent("Fixtures/Radar/\(name).json"))
+    }
+
+    private func fourTaskData(selections: [(String, String)], score: Double?, gradedRows: Int? = nil) throws -> Data {
+        var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: fixtureData("four-task-results")) as? [String: Any])
+        var models: [String] = []
+        var modelEfforts: [String: [String]] = [:]
+        for (model, effort) in selections {
+            if modelEfforts[model] == nil { models.append(model) }
+            modelEfforts[model, default: []].append(effort)
+        }
+        payload["models"] = models
+        payload["model_efforts"] = modelEfforts
+        payload["configurations"] = selections.count
+        payload["expected"] = selections.count * 4
+        payload["graded"] = score == nil ? 0 : (gradedRows ?? selections.count) * 4
+        payload["rows"] = selections.prefix(gradedRows ?? selections.count).map { model, effort -> [String: Any] in
+            var row: [String: Any] = ["model": model, "effort": effort]
+            if let score {
+                let fraction = score / 127.5
+                row["combined"] = ["score": fraction * 100]
+                row["pompeii"] = ["reward": fraction]
+                row["pelican"] = ["score": fraction * 100]
+                row["candy"] = ["correct": false]
+            }
+            return row
+        }
+        return try JSONSerialization.data(withJSONObject: payload)
     }
 
     private func benchBindingData(selections: [(String, String)], catalogVersion: String? = nil) throws -> Data {

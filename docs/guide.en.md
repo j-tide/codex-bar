@@ -12,7 +12,7 @@
 | **Multiple accounts** | Add accounts through browser OAuth or import account JSON. View identity, organization, and plan; refresh, reauthorize, or remove accounts. |
 | **Quotas and subscriptions** | The current implementation shows 5-hour / 7-day windows for Plus and a 7-day window for Pro. Toggle used / remaining values and inspect reset credits and expiry. Subscription dates come from the subscription endpoint, with stale results labeled. |
 | **Account switching** | Update local credentials alone, or switch and restart Codex. Account changes also synchronize with the local authentication file. |
-| **Model score matrix** | Compare Codex Radar scores weighted across software and visual-spatial evaluations. Refreshes every 15 minutes; failures retain the last successful result from the current app session. |
+| **Model score matrix** | Follows the four-task weighted scores on Codex Radar's homepage, with the evaluation window and current model/effort catalog. Refreshes every 15 minutes; failures mark and retain the last successful result from the current app session. |
 | **Local usage statistics** | Count timestamped token increments by local date, including cached input, with distinct session counts, a 30-day curve, and a 16-week heatmap. |
 | **Native appearance** | A two-column panel with light / dark themes and instant English / Chinese switching. Uses Liquid Glass on macOS 26 and system material fallbacks on earlier versions. |
 | **In-app updates** | Check GitHub Releases, download, verify, and install an update from the panel, with download progress and completion status. |

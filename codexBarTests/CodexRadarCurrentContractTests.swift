@@ -4,57 +4,167 @@ import XCTest
 
 @MainActor
 final class CodexRadarCurrentContractTests: XCTestCase {
-    func testServiceLoadsEverySelectedConfigurationFromThe150PointCatalog() async throws {
-        let bindingData = try fixtureData("bench-binding-150")
-        let binding = try CodexRadarBenchBinding.decode(bindingData)
+    func testServiceLoadsTheCurrentWebsiteRoundWithoutRequestingLegacyRadarBench() async throws {
+        let results = try fixtureData("four-task-results")
         let session = makeSession()
         defer { session.invalidateAndCancel(); CurrentRadarURLProtocol.respond = nil }
-        CurrentRadarURLProtocol.respond = try selectedSummaryResponse(bindingData: bindingData)
+        CurrentRadarURLProtocol.respond = { request in
+            switch request.url?.path {
+            case "/data/codex-four-task-results.json": return (200, results)
+            case "/current.json": return (503, Data())
+            default:
+                XCTFail("Unexpected legacy or unrelated request: \(request.url?.absoluteString ?? "nil")")
+                return (404, Data())
+            }
+        }
         let service = CodexRadarService(session: session)
 
         await service.refresh()
 
         XCTAssertNil(service.lastError)
+        XCTAssertNil(service.snapshot, "Reset-window failure must not prevent scores loading")
+        XCTAssertNotNil(service.lastFetchAt)
         let report = try XCTUnwrap(service.intelligence)
-        XCTAssertGreaterThanOrEqual(report.summaries.count, 34)
-        XCTAssertEqual(report.summaries.count, binding.selections.count)
+        XCTAssertEqual(report.selectionCount, 46)
+        XCTAssertEqual(report.maximumScore, 150)
+        XCTAssertFalse(report.sourceName.isEmpty)
+        XCTAssertTrue(report.testWindow?.contains("2026-10-29") == true)
         XCTAssertFalse(report.isPartial)
-        let high = CodexRadarSelection(model: "gpt-6.1-sol", effort: "high")
-        XCTAssertEqual(try XCTUnwrap(report.summaries[high]?.score), 97.90210570679321, accuracy: 0.000000000001)
-        XCTAssertEqual(try XCTUnwrap(report.modelIQ.comparisons[high.key]?.latest?.score), 97.90210570679321, accuracy: 0.000000000001)
+        let matrix = CodexRadarPresentation.matrix(from: report.modelIQ)
+        XCTAssertEqual(matrix.rows.count, 8)
+        XCTAssertEqual(matrix.cells.count, 46)
+        XCTAssertTrue(matrix.rows.contains { $0.displayName == "GPT-6.1 Terra" })
+        XCTAssertTrue(matrix.rows.contains { $0.displayName == "GPT-5.6 Terra" })
+        XCTAssertEqual(try score(report, model: "gpt-6.1-sol", effort: "high"), 123.80192307692307, accuracy: 0.0000000001)
     }
 
-    func testServiceKeepsLastGoodScoresDuring428AndRecoversOnTheNextRefresh() async throws {
-        let bindingData = try fixtureData("bench-binding-150")
+    func testEveryCurrentRoundScoreMatchesTheWebsiteProjection() throws {
+        let report = try CodexRadarFourTaskResults.decode(fixtureData("four-task-results")).report
+        let expected = try fixtureObject("four-task-expected-scores")
+        let rows = try XCTUnwrap(expected["rows"] as? [[String: Any]])
+        XCTAssertEqual(rows.count, 46)
+        for row in rows {
+            let model = try XCTUnwrap(row["model"] as? String)
+            let effort = try XCTUnwrap(row["effort"] as? String)
+            let expectedScore = try XCTUnwrap(row["score150"] as? Double)
+            XCTAssertEqual(try score(report, model: model, effort: effort), expectedScore, accuracy: 0.0000000001,
+                           "Website score mismatch for \(model) / \(effort)")
+            let display = try XCTUnwrap(row["score150_display"] as? String)
+            XCTAssertEqual(MetricFormat.score.text(try score(report, model: model, effort: effort)), display,
+                           "Website display mismatch for \(model) / \(effort)")
+        }
+    }
+
+    func testServiceKeepsLastGoodRoundDuringFailureAndRecoversOnTheNextRefresh() async throws {
+        let results = try fixtureData("four-task-results")
         let session = makeSession()
         defer { session.invalidateAndCancel(); CurrentRadarURLProtocol.respond = nil }
-        CurrentRadarURLProtocol.respond = try selectedSummaryResponse(bindingData: bindingData)
+        CurrentRadarURLProtocol.respond = { request in
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, results) : (503, Data())
+        }
         let service = CodexRadarService(session: session)
-        let high = CodexRadarSelection(model: "gpt-6.1-sol", effort: "high")
         await service.refresh()
         let original = try XCTUnwrap(service.intelligence)
         let fetchedAt = try XCTUnwrap(service.lastFetchAt)
-        XCTAssertEqual(original.summaries.count, 34)
+        let originalScore = try score(original, model: "gpt-6.1-sol", effort: "high")
 
+        CurrentRadarURLProtocol.respond = { _ in (503, Data()) }
+        await service.refresh()
+
+        XCTAssertTrue(service.lastError?.contains("503") == true)
+        XCTAssertEqual(service.lastFetchAt, fetchedAt)
+        XCTAssertEqual(service.intelligence?.selectionCount, 46)
+        XCTAssertEqual(try score(XCTUnwrap(service.intelligence), model: "gpt-6.1-sol", effort: "high"), originalScore)
+        XCTAssertFalse(service.isRefreshing)
+
+        var updated = try fixtureObject("four-task-results")
+        var rows = try XCTUnwrap(updated["rows"] as? [[String: Any]])
+        let highIndex = try XCTUnwrap(rows.firstIndex { ($0["model"] as? String) == "gpt-6.1-sol" && ($0["effort"] as? String) == "high" })
+        rows[highIndex]["combined"] = ["score": 0]
+        updated["rows"] = rows
+        updated["round_id"] = "next-author-round"
+        let updatedData = try JSONSerialization.data(withJSONObject: updated)
         CurrentRadarURLProtocol.respond = { request in
-            request.url?.path == "/data/radar-bench-binding.json" ? (200, bindingData) : (428, Data())
+            request.url?.path == "/data/codex-four-task-results.json" ? (200, updatedData) : (503, Data())
         }
         await service.refresh()
 
-        XCTAssertTrue(service.lastError?.contains("428") == true)
-        XCTAssertEqual(service.lastFetchAt, fetchedAt)
-        XCTAssertEqual(service.intelligence?.summaries.count, 34)
-        XCTAssertEqual(try XCTUnwrap(service.intelligence?.summaries[high]?.score), 97.90210570679321, accuracy: 0.000000000001)
-        XCTAssertFalse(service.isRefreshing)
-
-        CurrentRadarURLProtocol.respond = try selectedSummaryResponse(bindingData: bindingData, score: 100.125)
-        await service.refresh()
-
         XCTAssertNil(service.lastError)
-        XCTAssertFalse(service.intelligence?.isPartial ?? true)
-        XCTAssertEqual(service.intelligence?.summaries.count, 34)
-        XCTAssertEqual(service.intelligence?.summaries[high]?.score, 100.125)
+        let recovered = try XCTUnwrap(service.intelligence)
+        XCTAssertFalse(recovered.isPartial)
+        XCTAssertEqual(recovered.selectionCount, 46)
+        XCTAssertEqual(try score(recovered, model: "gpt-6.1-sol", effort: "high"), originalScore - 41.4, accuracy: 0.0000000001)
         XCTAssertFalse(service.isRefreshing)
+    }
+
+    func testMissingTaskOrRowRetainsCatalogWithoutInventingAZeroScore() throws {
+        let original = try fixtureObject("four-task-results")
+        for omitWholeRow in [false, true] {
+            var payload = original
+            var rows = try XCTUnwrap(payload["rows"] as? [[String: Any]])
+            if omitWholeRow { rows.removeFirst() }
+            else { rows[0]["pompeii"] = NSNull() }
+            payload["rows"] = rows
+            let report = try CodexRadarFourTaskResults.decode(JSONSerialization.data(withJSONObject: payload)).report
+            XCTAssertEqual(report.selectionCount, 46)
+            XCTAssertTrue(report.isPartial)
+            let matrix = CodexRadarPresentation.matrix(from: report.modelIQ)
+            XCTAssertEqual(matrix.rows.count, 8)
+            XCTAssertEqual(matrix.cells.count, 45)
+            let sol = try XCTUnwrap(matrix.rows.first { $0.displayName == "GPT-6.1 Sol" })
+            XCTAssertNil(sol.cell(for: "low"))
+        }
+        var allMissing = original
+        allMissing["rows"] = []
+        let emptyReport = try CodexRadarFourTaskResults.decode(JSONSerialization.data(withJSONObject: allMissing)).report
+        XCTAssertEqual(emptyReport.selectionCount, 46)
+        XCTAssertTrue(emptyReport.isPartial)
+        XCTAssertEqual(CodexRadarPresentation.matrix(from: emptyReport.modelIQ).rows.count, 8)
+        XCTAssertTrue(CodexRadarPresentation.matrix(from: emptyReport.modelIQ).cells.isEmpty)
+    }
+
+    func testCurrentRoundPreservesARealZeroScore() throws {
+        var payload = try fixtureObject("four-task-results")
+        var rows = try XCTUnwrap(payload["rows"] as? [[String: Any]])
+        rows[0]["combined"] = ["score": 0]
+        rows[0]["pompeii"] = ["reward": 0]
+        rows[0]["pelican"] = ["score": 0]
+        rows[0]["candy"] = ["correct": false]
+        payload["rows"] = rows
+        let report = try CodexRadarFourTaskResults.decode(JSONSerialization.data(withJSONObject: payload)).report
+        XCTAssertEqual(try score(report, model: "gpt-6.1-sol", effort: "low"), 0)
+        XCTAssertFalse(report.isPartial)
+    }
+
+    func testCurrentRoundRejectsUnknownContractsInvalidScoresAndConflictingIdentities() throws {
+        let valid = try fixtureObject("four-task-results")
+        for (key, value) in [
+            ("schema", "unknown-schema" as Any),
+            ("protocol", "unknown-weighting" as Any),
+            ("score_max", 100 as Any),
+            ("task_weights", ["combined": 60, "pompeii": 45, "pelican": 22.5, "candy": 1] as Any)
+        ] {
+            var invalid = valid
+            invalid[key] = value
+            XCTAssertThrowsError(try CodexRadarFourTaskResults.decode(JSONSerialization.data(withJSONObject: invalid)), key)
+        }
+        let validRows = try XCTUnwrap(valid["rows"] as? [[String: Any]])
+        let invalidRowValues: [(String, Any)] = [
+            ("model", "outside-the-catalog"), ("effort", "outside-the-catalog"),
+            ("combined", ["score": -1]), ("combined", ["score": 100.001]),
+            ("pompeii", ["reward": -0.001]), ("pompeii", ["reward": 1.001]),
+            ("pelican", ["score": 100.001]), ("candy", ["correct": "true"])
+        ]
+        for (key, value) in invalidRowValues {
+            var invalid = valid
+            var rows = validRows
+            rows[0][key] = value
+            invalid["rows"] = rows
+            XCTAssertThrowsError(try CodexRadarFourTaskResults.decode(JSONSerialization.data(withJSONObject: invalid)), "Invalid \(key): \(value)")
+        }
+        var duplicate = valid
+        duplicate["rows"] = validRows + [validRows[0]]
+        XCTAssertThrowsError(try CodexRadarFourTaskResults.decode(JSONSerialization.data(withJSONObject: duplicate)))
     }
 
     func testDecoderPreservesRaw150PointScoresAndLegacy100PointFixtures() throws {
@@ -187,33 +297,11 @@ final class CodexRadarCurrentContractTests: XCTestCase {
         return URLSession(configuration: configuration)
     }
 
-    private func selectedSummaryResponse(bindingData: Data, score: Double? = nil) throws -> (URLRequest) throws -> (Int, Data) {
-        let captured = try fixtureObject("bench-summary-150")
-        return { request in
-            guard let url = request.url else { return (400, Data()) }
-            if url.path == "/data/radar-bench-binding.json" { return (200, bindingData) }
-            guard url.path == "/api/radar-bench-score",
-                  let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
-                  query.first(where: { $0.name == "view" })?.value == "summary",
-                  let model = query.first(where: { $0.name == "model" })?.value,
-                  let effort = query.first(where: { $0.name == "effort" })?.value else {
-                return (503, Data())
-            }
-            let isSelected = query.contains { $0.name == "selection" && $0.value == "user-selected-v1" }
-                || request.value(forHTTPHeaderField: "X-Radar-Bench-Selection") == "user-selected-v1"
-            guard isSelected || (model == "gpt-6.1-sol" && effort == "low") else { return (428, Data()) }
-            var payload = captured
-            payload["model"] = model
-            payload["effort"] = effort
-            if let score { payload["score"] = score }
-            if var history = payload["history"] as? [String: Any] {
-                history["model"] = model
-                history["effort"] = effort
-                payload["history"] = history
-            }
-            return (200, try JSONSerialization.data(withJSONObject: payload))
-        }
+    private func score(_ report: CodexRadarIntelligenceReport, model: String, effort: String) throws -> Double {
+        let selection = CodexRadarSelection(model: model, effort: effort)
+        return try XCTUnwrap(report.modelIQ.comparisons[selection.key]?.latest?.score)
     }
+
 }
 
 private final class CurrentRadarURLProtocol: URLProtocol {

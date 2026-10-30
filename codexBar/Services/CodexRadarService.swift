@@ -65,44 +65,15 @@ final class CodexRadarService: ObservableObject {
 
     private func refreshIntelligence() async {
         do {
-            let bindingData = try await fetch(URL(string: "https://codexradar.com/data/radar-bench-binding.json")!)
-            let binding = try CodexRadarBenchBinding.decode(bindingData)
-            var summaries: [CodexRadarSelection: CodexRadarBenchSummary] = [:]
-            var firstError: Error?
-            await withTaskGroup(of: (CodexRadarSelection, Result<Data, Error>).self) { group in
-                for selection in binding.selections {
-                    var url = URLComponents(string: "https://codexradar.com/api/radar-bench-score")!
-                    url.queryItems = [
-                        URLQueryItem(name: "model", value: selection.model),
-                        URLQueryItem(name: "effort", value: selection.effort),
-                        URLQueryItem(name: "view", value: "summary"),
-                        URLQueryItem(name: "selection", value: "user-selected-v1")
-                    ]
-                    let requestURL = url.url!
-                    group.addTask { (selection, await self.fetchQualityData(requestURL)) }
-                }
-                for await (selection, result) in group {
-                    do {
-                        summaries[selection] = try CodexRadarBenchSummary.decode(
-                            result.get(), binding: binding, selection: selection
-                        )
-                    } catch {
-                        if firstError == nil { firstError = error }
-                    }
-                }
-            }
-            guard !summaries.isEmpty else { throw firstError ?? CodexRadarError.modelQualityUnavailable }
-            intelligence = CodexRadarIntelligenceReport(binding: binding, summaries: summaries)
+            // This is the source used by the homepage's current intelligence table.
+            // RadarBench remains online, but represents a separate, older benchmark.
+            let data = try await fetch(URL(string: "https://codexradar.com/data/codex-four-task-results.json")!)
+            intelligence = try CodexRadarFourTaskResults.decode(data).report
             lastFetchAt = Date()
             lastError = nil
         } catch {
             lastError = error.localizedDescription
         }
-    }
-
-    private func fetchQualityData(_ url: URL) async -> Result<Data, Error> {
-        do { return .success(try await fetch(url)) }
-        catch { return .failure(error) }
     }
 
     private func fetch(_ url: URL) async throws -> Data {

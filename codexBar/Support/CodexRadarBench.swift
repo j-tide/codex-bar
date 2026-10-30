@@ -134,12 +134,28 @@ struct CodexRadarBenchSummary: Decodable {
 }
 
 struct CodexRadarIntelligenceReport {
-    let binding: CodexRadarBenchBinding
-    let summaries: [CodexRadarSelection: CodexRadarBenchSummary]
+    enum Source { case radarBench, fourTasks }
 
-    var isPartial: Bool { summaries.count < binding.selections.count }
+    let modelIQ: CodexRadarModelIQ
+    let selectionCount: Int
+    let maximumScore: Double
+    let isPartial: Bool
+    let source: Source
+    var testInterval: CodexRadarTestInterval? = nil
 
-    var modelIQ: CodexRadarModelIQ {
+    var sourceName: String {
+        switch source {
+        case .radarBench: return "RadarBench"
+        case .fourTasks: return L.zh ? "四项评测" : "4 tasks"
+        }
+    }
+
+    var testWindow: String? {
+        guard let testInterval else { return nil }
+        return L.zh ? testInterval.displayZH : testInterval.displayEN
+    }
+
+    init(binding: CodexRadarBenchBinding, summaries: [CodexRadarSelection: CodexRadarBenchSummary]) {
         let comparisons = binding.selections.map { selection in
             let summary = summaries[selection]
             let entry = CodexRadarModelIQEntry(
@@ -150,6 +166,20 @@ struct CodexRadarIntelligenceReport {
                 label: nil, model: selection.model, reasoningEffort: selection.effort, latest: entry
             ))
         }
-        return CodexRadarModelIQ(latest: nil, comparisons: Dictionary(uniqueKeysWithValues: comparisons))
+        modelIQ = CodexRadarModelIQ(latest: nil, comparisons: Dictionary(uniqueKeysWithValues: comparisons))
+        selectionCount = binding.selections.count
+        maximumScore = binding.maximumScore
+        isPartial = summaries.count < binding.selections.count
+        source = .radarBench
+    }
+
+    init(modelIQ: CodexRadarModelIQ, selectionCount: Int, maximumScore: Double,
+         isPartial: Bool, testInterval: CodexRadarTestInterval?) {
+        self.modelIQ = modelIQ
+        self.selectionCount = selectionCount
+        self.maximumScore = maximumScore
+        self.isPartial = isPartial
+        source = .fourTasks
+        self.testInterval = testInterval
     }
 }

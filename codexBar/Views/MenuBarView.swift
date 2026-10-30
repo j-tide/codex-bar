@@ -86,7 +86,8 @@ struct MenuBarView: View {
         let rows = CodexRadarPresentation.matrix(from: radar.intelligence?.modelIQ).rows.count
         return CodexRadarQualityContent.panelHeight(
             rowCount: rows, isPartial: radar.intelligence?.isPartial == true,
-            maximumHeight: contentBudget - activityViewportHeight
+            maximumHeight: contentBudget - activityViewportHeight,
+            hasTestWindow: radar.intelligence?.testWindow != nil
         )
     }
 
