@@ -188,6 +188,33 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         }
     }
 
+    func testNineModelsFitTheRegularPanelAndRemainReachableInACompactPanel() throws {
+        let captured = try XCTUnwrap(JSONSerialization.jsonObject(with: fixtureData("four-task-results")) as? [String: Any])
+        let rows = try XCTUnwrap(captured["rows"] as? [[String: Any]])
+        var selections = try rows.map { row in
+            (try XCTUnwrap(row["model"] as? String), try XCTUnwrap(row["effort"] as? String))
+        }
+        // Exercise a future ninth model without adding one to the production catalog.
+        selections.append(("gpt-7-nova", "high"))
+        let report = try CodexRadarFourTaskResults.decode(fourTaskData(selections: selections, score: 73.5)).report
+        let matrix = CodexRadarPresentation.matrix(from: report.modelIQ)
+        XCTAssertEqual(matrix.rows.count, 9)
+        let panelHeight = CodexRadarQualityContent.panelHeight(rowCount: 9, isPartial: false, hasTestWindow: true)
+        XCTAssertLessThanOrEqual(panelHeight, 340, "Nine models should not dominate the menu's lower half")
+
+        let regular = try render(
+            CodexRadarQualityContent(report: report, isRefreshing: false, error: nil, maximumHeight: panelHeight),
+            name: "nine-model-regular", checkAllRowsVisible: true
+        )
+        XCTAssertLessThanOrEqual(regular.height, panelHeight)
+        XCTAssertGreaterThan(regular.height, CodexRadarTableView.height(rowCount: 9))
+
+        let compact = try render(
+            CodexRadarQualityContent(report: report, isRefreshing: false, error: nil, maximumHeight: 220),
+            name: "nine-model-compact", checkScrolling: true
+        )
+        XCTAssertLessThanOrEqual(compact.height, 220)
+    }
 
     func testCapturedPublicCatalogShowsGPT61AndRendersAtMenuWidth() throws {
         let report = try fixtureReport()
@@ -228,9 +255,8 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         let size = try render(CodexRadarQualityContent(report: report, isRefreshing: false, error: nil)
             .background(Color.white).environment(\.colorScheme, .light), name: "matrix-captured-public")
 
-        XCTAssertGreaterThanOrEqual(size.height, 252, "All six model rows must remain visible in the matrix")
-        XCTAssertLessThanOrEqual(size.height, 296)
-        XCTAssertEqual(CodexRadarQualityContent.panelHeight(rowCount: 6, isPartial: false), 296)
+        XCTAssertGreaterThan(size.height, CodexRadarTableView.height(rowCount: matrix.rows.count), "The panel retains the full table and its context")
+        XCTAssertLessThanOrEqual(size.height, CodexRadarQualityContent.panelHeight(rowCount: matrix.rows.count, isPartial: false))
     }
 
     func testEntirelyUnscoredCatalogStillShowsTheModelMatrixAndPartialNotice() throws {
@@ -244,11 +270,12 @@ final class CodexRadarIntelligenceTests: XCTestCase {
             )
         }
         let report = CodexRadarIntelligenceReport(binding: binding, summaries: summaries)
+        let rowCount = CodexRadarPresentation.matrix(from: report.modelIQ).rows.count
         let size = try render(CodexRadarQualityContent(report: report, isRefreshing: false, error: nil)
             .background(Color.white).environment(\.colorScheme, .light), name: "matrix-no-grades")
 
-        XCTAssertGreaterThanOrEqual(size.height, 252, "Unscored models remain visible with unavailable cells")
-        XCTAssertLessThanOrEqual(size.height, 296)
+        XCTAssertGreaterThan(size.height, CodexRadarTableView.height(rowCount: rowCount), "Unscored models remain visible with unavailable cells")
+        XCTAssertLessThanOrEqual(size.height, CodexRadarQualityContent.panelHeight(rowCount: rowCount, isPartial: false))
 
         let missing = try XCTUnwrap(binding.selections.first)
         let partial = CodexRadarIntelligenceReport(binding: binding, summaries: summaries.filter { $0.key != missing })
@@ -398,7 +425,7 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         return CodexRadarIntelligenceReport(binding: binding, summaries: summaries)
     }
 
-    private func render<V: View>(_ content: V, name: String, width: CGFloat? = nil, checkScrolling: Bool = false) throws -> CGSize {
+    private func render<V: View>(_ content: V, name: String, width: CGFloat? = nil, checkScrolling: Bool = false, checkAllRowsVisible: Bool = false) throws -> CGSize {
         let hosting = NSHostingView(rootView: content.environment(\.popupLiveUpdates, false).frame(width: width ?? PopupLayout.columnWidth))
         var size = hosting.fittingSize
         hosting.frame = NSRect(origin: .zero, size: size)
@@ -413,16 +440,25 @@ final class CodexRadarIntelligenceTests: XCTestCase {
         window.setContentSize(size)
         hosting.setFrameSize(size)
         hosting.layoutSubtreeIfNeeded()
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews(in: $0) }
+        }
+        let scrollingTables = scrollViews(in: hosting).filter {
+            ($0.documentView?.bounds.height ?? 0) > $0.contentView.bounds.height + 1
+        }
+        if checkAllRowsVisible {
+            XCTAssertTrue(scrollingTables.isEmpty, "All nine model rows should fit without scrolling at regular size")
+        }
         if checkScrolling {
-            func scrollViews(in view: NSView) -> [NSScrollView] {
-                (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews(in: $0) }
-            }
-            let scroll = try XCTUnwrap(scrollViews(in: hosting).first { ($0.documentView?.bounds.height ?? 0) >= 1200 })
+            let scroll = try XCTUnwrap(scrollingTables.max {
+                ($0.documentView?.bounds.height ?? 0) < ($1.documentView?.bounds.height ?? 0)
+            })
             let document = try XCTUnwrap(scroll.documentView)
             XCTAssertGreaterThan(document.bounds.height, scroll.contentView.bounds.height)
             document.scrollToVisible(NSRect(x: 0, y: document.bounds.maxY - 1, width: 1, height: 1))
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
             XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0, "The final catalog rows must be reachable by scrolling")
+            XCTAssertGreaterThanOrEqual(scroll.contentView.bounds.maxY, document.bounds.maxY - 1)
         }
         window.displayIfNeeded()
         let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))

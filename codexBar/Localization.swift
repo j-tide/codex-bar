@@ -397,6 +397,9 @@ enum L {
     static func radarGradedSelections(scored: Int, total: Int) -> String {
         zh ? "\(scored)/\(total) 个档位有成绩 · — 暂无评分" : "\(scored)/\(total) graded · — awaiting grades"
     }
+    static func radarGradedSelectionCount(scored: Int, total: Int) -> String {
+        zh ? "\(scored)/\(total) 档有成绩" : "\(scored)/\(total) graded"
+    }
     static var radarPublicSummary: String { zh ? "公开聚合成绩" : "Public scores" }
     static var radarScoreCached: String { zh ? "上次数据" : "Cached" }
     static var modelQualityTitle: String { zh ? "模型质量" : "Model Quality" }

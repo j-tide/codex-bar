@@ -26,10 +26,11 @@ struct CodexRadarView: View {
 struct CodexRadarQualityContent: View {
     // The 9-point test-window line occupies 11 points, plus the stack's 10-point spacing.
     private static let testWindowHeight: CGFloat = 21
+    private static let chromeHeight: CGFloat = 75
 
     static func panelHeight(rowCount: Int, isPartial: Bool, maximumHeight: CGFloat = 360, hasTestWindow: Bool = false) -> CGFloat {
         let partialNoticeHeight: CGFloat = isPartial ? 24 : 0
-        return min(max(0, maximumHeight), max(252, CodexRadarTableView.height(rowCount: rowCount) + 96 + partialNoticeHeight + (hasTestWindow ? testWindowHeight : 0)))
+        return min(max(0, maximumHeight), max(228, CodexRadarTableView.height(rowCount: rowCount) + chromeHeight + partialNoticeHeight + (hasTestWindow ? testWindowHeight : 0)))
     }
 
     @AppStorage("languageOverride") private var chinese = L.systemIsChinese
@@ -47,7 +48,7 @@ struct CodexRadarQualityContent: View {
 
     private var tableViewportHeight: CGFloat {
         min(CodexRadarTableView.height(rowCount: matrix.rows.count),
-            max(0, maximumHeight - 96 - (report?.isPartial == true ? 24 : 0) - (report?.testWindow == nil ? 0 : Self.testWindowHeight)))
+            max(0, maximumHeight - Self.chromeHeight - (report?.isPartial == true ? 24 : 0) - (report?.testWindow == nil ? 0 : Self.testWindowHeight)))
     }
 
     var body: some View {
@@ -83,9 +84,6 @@ struct CodexRadarQualityContent: View {
                     }
                 }
                 .zIndex(1)
-                Text(L.radarGradedSelections(scored: matrix.cells.count, total: report?.selectionCount ?? 0))
-                    .font(.system(size: 9)).foregroundStyle(.secondary)
-                    .help(L.radarMatrixNotice)
                 footer
             }
         }
@@ -159,6 +157,9 @@ struct CodexRadarQualityContent: View {
 
     private var footer: some View {
         HStack(spacing: 4) {
+            Text(L.radarGradedSelectionCount(scored: matrix.cells.count, total: report?.selectionCount ?? 0))
+                .help(L.radarMatrixNotice)
+            Spacer(minLength: 6)
             if error != nil {
                 Image(systemName: "exclamationmark.circle")
                     .foregroundStyle(CodexStatusPalette.warning)
@@ -167,12 +168,11 @@ struct CodexRadarQualityContent: View {
                     .help(error ?? "")
             } else {
                 Text("Codex Radar")
-                    .foregroundStyle(.secondary)
+                    .help(L.radarPublicSummary)
             }
-            Text(L.radarPublicSummary).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
         }
         .font(.system(size: 9))
+        .foregroundStyle(.secondary)
         .lineLimit(1)
     }
 
@@ -198,8 +198,8 @@ struct CodexRadarTableView: View {
     @AppStorage("languageOverride") private var chinese = L.systemIsChinese
     @Environment(\.colorScheme) private var colorScheme
     let matrix: CodexRadarMatrix
-    private let modelWidth: CGFloat = 82
-    static func height(rowCount: Int) -> CGFloat { 20 + CGFloat(rowCount) * 30 }
+    private let modelWidth: CGFloat = 76
+    static func height(rowCount: Int) -> CGFloat { 20 + CGFloat(rowCount) * 24 }
 
     var body: some View {
         let _ = chinese
@@ -223,16 +223,23 @@ struct CodexRadarTableView: View {
                             Image(systemName: row.family.symbolName)
                                 .font(.system(size: 10)).foregroundStyle(.secondary)
                                 .accessibilityHidden(true)
-                            Text(row.displayName)
-                                .font(.system(size: 10, weight: .semibold))
+                            Text(row.displayName.hasPrefix("GPT-") ? String(row.displayName.dropFirst(4)) : row.displayName)
+                                .font(.system(size: 10, weight: .medium))
                                 .lineLimit(1).minimumScaleFactor(0.72)
                         }
                         .frame(width: modelWidth, alignment: .leading)
                         .help(row.displayName)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(row.displayName)
                         ForEach(matrix.columns) { column in
                             score(row.cell(for: column.id), row: row, effort: column.id)
-                                .frame(width: cellWidth, height: 28)
+                                .frame(width: cellWidth, height: 22)
                         }
+                    }
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 0.5)
+                            .offset(y: 1)
+                            .allowsHitTesting(false)
                     }
                 }
             }
@@ -245,42 +252,23 @@ struct CodexRadarTableView: View {
         let podium = rank.map { $0 <= 3 } ?? false
         return Group {
             if let cell {
-                VStack(spacing: 0) {
-                    HStack(spacing: 1) {
-                        Spacer(minLength: 0)
-                        if let rank, rank <= 3 {
-                            Image(systemName: "crown.fill").font(.system(size: 7, weight: .semibold))
-                            Text("\(rank)").font(.system(size: 7, weight: .bold, design: .rounded))
-                        }
-                    }
-                    .foregroundStyle(rankColor(rank)).frame(height: 9)
-                    .padding(.trailing, 3).accessibilityHidden(true)
-                    AnimatedMetric(value: cell.score, format: .score)
-                        .font(.system(size: 11, weight: podium ? .semibold : .medium, design: .rounded))
-                        .foregroundStyle(podium ? rankColor(rank) : Color.primary)
-                        .lineLimit(1).minimumScaleFactor(0.72)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .padding(.bottom, 2)
+                AnimatedMetric(value: cell.score, format: .score)
+                .font(.system(size: 11, weight: podium ? .semibold : .regular, design: .rounded))
+                .foregroundStyle(podium ? rankColor(rank) : Color.primary.opacity(0.86))
+                .lineLimit(1).minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background {
-                    let tint = podium ? rankColor(rank) : Color.primary
-                    let opacity = podium ? (colorScheme == .dark ? 0.22 : 0.16) : 0.035
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(LinearGradient(colors: [tint.opacity(opacity), tint.opacity(opacity * 0.65)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .overlay {
-                            if podium {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(tint.opacity(0.3), lineWidth: 0.5)
-                            }
-                        }
-                        .padding(.horizontal, 1)
+                    if podium {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(rankColor(rank).opacity(colorScheme == .dark ? 0.16 : 0.1))
+                            .padding(.horizontal, 2)
+                    }
                 }
                 .contentShape(Rectangle())
                 .help(CodexRadarPresentation.scoreHelp(for: cell, rank: rank))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L.modelQualityCellAccessibility(
-                    model: cell.displayName, score: String(format: "%.2f", cell.score),
+                    model: cell.displayName, score: MetricFormat.score.text(cell.score),
                     coverage: cell.coverageText, rank: rank))
             } else {
                 Text("—").font(.system(size: 11)).foregroundStyle(.tertiary)
